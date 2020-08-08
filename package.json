@@ -1,9 +1,9 @@
 {
-  "name": "sharedb-ace",
-  "version": "1.0.1",
+  "name": "@sourceacademy/sharedb-ace",
+  "version": "2.0.0",
   "description": "ShareDB keybindings for Ace Editor",
   "main": "./distribution/sharedb-ace.js",
-  "repository": "https://github.com/jethrokuan/sharedb-ace",
+  "repository": "https://github.com/source-academy/sharedb-ace",
   "author": "Jethro Kuan",
   "files": [
     "dist",
@@ -11,37 +11,38 @@
   ],
   "license": "MIT",
   "scripts": {
-    "build": "npm run build:npm && npm run build:dist",
-    "build:npm": "babel source --presets babel-preset-latest --out-dir distribution",
+    "build": "yarn run build:yarn && yarn run build:dist",
+    "build:yarn": "babel source --out-dir distribution --presets=@babel/preset-env",
     "build:dist": "webpack",
     "test": "echo 'doing nothing'",
-    "docs": "jsdoc source/*.js -d ./docs/",
-    "prepublish": "npm run build"
+    "docs": "jsdoc source/*.js -d ./docs/"
   },
   "devDependencies": {
-    "amd-loader": "^0.0.5",
-    "assert": "^1.4.1",
-    "babel-cli": "^6.18.0",
-    "babel-loader": "^6.2.10",
-    "babel-preset-latest": "^6.16.0",
-    "chai": "^3.5.0",
-    "chai-as-promised": "^6.0.0",
+    "@babel/cli": "^7.10.5",
+    "@babel/core": "^7.11.1",
+    "@babel/preset-env": "^7.11.0",
+    "amd-loader": "^0.0.8",
+    "assert": "^2.0.0",
+    "babel-loader": "^8.1.0",
+    "chai": "^4.2.0",
+    "chai-as-promised": "^7.1.1",
     "chai-json-equal": "^0.0.1",
-    "eslint": "^3.15.0",
-    "eslint-config-airbnb": "^14.1.0",
-    "eslint-plugin-import": "^2.2.0",
-    "eslint-plugin-jsx-a11y": "^4.0.0",
-    "eslint-plugin-react": "^6.9.0",
-    "jsdom": "^9.10.0",
-    "mocha": "^3.2.0",
+    "eslint": "^7.6.0",
+    "eslint-config-airbnb": "^18.2.0",
+    "eslint-plugin-import": "^2.22.0",
+    "eslint-plugin-jsx-a11y": "^6.3.1",
+    "eslint-plugin-react": "^7.20.5",
+    "jsdom": "^16.3.0",
+    "mocha": "^8.1.1",
     "pre-commit": "^1.2.2",
-    "webpack": "^1.14.0"
+    "webpack": "^4.44.1",
+    "webpack-cli": "^3.3.12"
   },
   "dependencies": {
     "event-emitter-es6": "^1.1.5",
-    "logdown": "^2.0.3",
-    "reconnecting-websocket": "^4.1.10",
-    "semantic-release": "^15.13.3",
-    "sharedb": "^1.0.0-beta.7"
+    "logdown": "^3.3.1",
+    "reconnecting-websocket": "^4.4.0",
+    "semantic-release": "^17.1.1",
+    "sharedb": "^1.4.1"
   }
 }

@@ -11,19 +11,19 @@ module.exports = {
     new webpack.DefinePlugin({
       'process.env': {
         NODE_ENV: JSON.stringify('production'),
-      } 
-    }),
-    new webpack.optimize.UglifyJsPlugin({
-      compress: {
-        warnings: false
       }
     })
   ],
   module: {
-    loaders: [{
+    rules: [{
       test: /\.js$/,
       exclude: /node_modules/,
-      loader: 'babel-loader'
+      use: {
+        loader: 'babel-loader',
+        options: {
+          presets: ['@babel/preset-env']
+        }
+      }
     }]
   }
  }

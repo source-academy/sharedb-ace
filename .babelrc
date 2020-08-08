@@ -1,1 +1,11 @@
-{ "presets": ["latest"] }
+{
+  "presets": [
+    [
+      "@babel/preset-env",
+      {
+        "targets": ["Firefox ESR", "last 2 chrome versions", "last 2 safari versions"],
+        "loose": false
+      }
+    ]
+  ]
+}
