@@ -1,9 +1,9 @@
 module.exports = {
-    "extends": "airbnb",
-    "installedESLint": true,
-    "plugins": [
-        "react",
-        "jsx-a11y",
-        "import"
-    ]
+  root: true,
+  extends: ['eslint:recommended'],
+  rules: {
+    eqeqeq: ['error', 'always']
+  },
+  parserOptions: { ecmaVersion: 11, sourceType: 'module' },
+  env: { es6: true, node: true }
 };
