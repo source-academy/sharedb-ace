@@ -55,11 +55,10 @@ class SharedbAce extends EventEmitter {
 
     // Fetches once from the server, and fires events
     // on subsequent document changes
-
     const docSubscribed = (err) => {
       if (err) throw err;
 
-      if (doc.type === null) {
+      if (!doc.type) {
         throw new Error('ShareDB document uninitialized. Please check if you'
                         + ' have the correct id or that you have initialized '
                         + 'the document in the server.');
@@ -68,7 +67,7 @@ class SharedbAce extends EventEmitter {
       this.emit('ready');
     };
 
-    doc.subscribe(docSubscribed.bind(doc));
+    doc.subscribe(docSubscribed);
 
     this.doc = doc;
     this.connections = {};
