@@ -31,6 +31,7 @@ class SharedbAceBinding {
    * @param {string[]} options.path - A lens, describing the nesting
    * to the JSON document. It should point to a string.
    * @param {Object[]} options.plugins - array of sharedb-ace plugins
+   * @param {?function} options.onError - a callback on error
    * @example
    * const binding = new SharedbAceBinding({
    *   ace: aceInstance,
@@ -51,10 +52,6 @@ class SharedbAceBinding {
     this.pluginWS = options.pluginWS;
     this.plugins = options.plugins || [];
     this.logger = new Logdown('shareace');
-
-    if (process.env.NODE_ENV === 'production') {
-      Logdown.disable('*');
-    }
 
     // Initialize plugins
     this.plugins.forEach((plugin) => {
