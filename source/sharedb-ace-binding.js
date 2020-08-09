@@ -8,6 +8,13 @@
 /* global process.env */
 import Logdown from 'logdown';
 
+function traverse(object, path) {
+  for (const key of path) {
+    object = object[key];
+  }
+  return object;
+}
+
 class SharedbAceBinding {
   /**
    * Constructs the binding object.
@@ -73,9 +80,7 @@ class SharedbAceBinding {
    */
   setInitialValue() {
     this.suppress = true;
-    // TODO: fix this
-    // This doesn't work for nested JSON sharedb documents > 1
-    this.session.setValue(this.doc.data[this.path[0]]);
+    this.session.setValue(traverse(this.doc.data, this.path));
     this.suppress = false;
   }
 
