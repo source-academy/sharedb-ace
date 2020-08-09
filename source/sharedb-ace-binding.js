@@ -5,7 +5,6 @@
  * @license MIT
  */
 
-/* global process.env */
 import Logdown from 'logdown';
 
 function traverse(object, path) {
@@ -256,7 +255,7 @@ class SharedbAceBinding {
       this.logger.log('*remote*: session value');
       this.logger.log(JSON.stringify(this.session.getValue()));
       this.logger.log('*remote*: delta applied');
-    } catch {
+    } catch (err) {
       this.onError && this.onError(err);
     }
   }
