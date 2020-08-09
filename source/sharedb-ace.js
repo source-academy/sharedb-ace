@@ -94,6 +94,7 @@ class SharedbAce extends EventEmitter {
       pluginWS: this.pluginWS,
       id: this.id,
       plugins,
+      onError: (error) => this.emit('error', path, error)
     });
     this.connections[path.join('-')] = binding;
   }

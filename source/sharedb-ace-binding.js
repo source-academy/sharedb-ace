@@ -51,6 +51,7 @@ class SharedbAceBinding {
     this.doc = options.doc;
     this.pluginWS = options.pluginWS;
     this.plugins = options.plugins || [];
+    this.onError = options.onError;
     this.logger = new Logdown('shareace');
 
     // Initialize plugins
@@ -68,6 +69,7 @@ class SharedbAceBinding {
     // Event Listeners
     this.$onLocalChange = this.onLocalChange.bind(this);
     this.$onRemoteChange = this.onRemoteChange.bind(this);
+    this.$onRemoteReload = this.onRemoteReload.bind(this);
 
     this.listen();
   }
@@ -87,6 +89,7 @@ class SharedbAceBinding {
   listen() {
     this.session.on('change', this.$onLocalChange);
     this.doc.on('op', this.$onRemoteChange);
+    this.doc.on('load', this.$onRemoteReload);
   }
 
   /**
@@ -94,7 +97,8 @@ class SharedbAceBinding {
    */
   unlisten() {
     this.session.removeListener('change', this.$onLocalChange);
-    this.doc.on('op', this.$onRemoteChange);
+    this.doc.off('op', this.$onRemoteChange);
+    this.doc.off('load', this.$onRemoteReload);
   }
 
   /**
@@ -187,22 +191,36 @@ class SharedbAceBinding {
    * ace editor event listener spec)
    */
   onLocalChange(delta) {
-    this.logger.log(`*local*: fired ${Date.now()}`);
-    this.logger.log(`*local*: delta received: ${JSON.stringify(delta)}`);
+    try {
+      this.logger.log(`*local*: fired ${Date.now()}`);
+      this.logger.log(`*local*: delta received: ${JSON.stringify(delta)}`);
 
-    if (this.suppress) {
-      this.logger.log('*local*: local delta, _skipping_');
-      return;
+      if (this.suppress) {
+        this.logger.log('*local*: local delta, _skipping_');
+        return;
+      }
+      const op = this.deltaTransform(delta);
+      this.logger.log(`*local*: transformed op: ${JSON.stringify(op)}`);
+
+      const docSubmitted = (err) => {
+        if (err) {
+          this.onError && this.onError(err);
+          this.logger.log(`*local*: op error: ${err}`);
+        } else {
+          this.logger.log('*local*: op submitted');
+        }
+      };
+
+      if (!this.doc.type) {
+        // likely previous operation failed, we're out of sync
+        // don't submitOp now
+        return;
+      }
+
+      this.doc.submitOp(op, { source: this }, docSubmitted);
+    } catch (err) {
+      this.onError && this.onError(err);
     }
-    const op = this.deltaTransform(delta);
-    this.logger.log(`*local*: transformed op: ${JSON.stringify(op)}`);
-
-    const docSubmitted = (err) => {
-      if (err) throw err;
-      this.logger.log('*local*: op submitted');
-    };
-
-    this.doc.submitOp(op, { source: this }, docSubmitted);
   }
 
   /**
@@ -213,30 +231,43 @@ class SharedbAceBinding {
    * created the op. If self, don't apply the op.
    */
   onRemoteChange(ops, source) {
-    this.logger.log(`*remote*: fired ${Date.now()}`);
-    const self = this;
+    try {
+      this.logger.log(`*remote*: fired ${Date.now()}`);
+      const self = this;
 
-    const opsPath = ops[0].p.slice(0, ops[0].p.length - 1).toString();
-    this.logger.log(opsPath);
-    if (source === self) {
-      this.logger.log('*remote*: op origin is self; _skipping_');
-      return;
-    } else if (opsPath !== this.path.toString()) {
-      this.logger.log('*remote*: not from my path; _skipping_');
-      return;
+      const opsPath = ops[0].p.slice(0, ops[0].p.length - 1).toString();
+      this.logger.log(opsPath);
+      if (source === self) {
+        this.logger.log('*remote*: op origin is self; _skipping_');
+        return;
+      } else if (opsPath !== this.path.toString()) {
+        this.logger.log('*remote*: not from my path; _skipping_');
+        return;
+      }
+
+      const deltas = this.opTransform(ops);
+      this.logger.log(`*remote*: op received: ${JSON.stringify(ops)}`);
+      this.logger.log(`*remote*: transformed delta: ${JSON.stringify(deltas)}`);
+
+      self.suppress = true;
+      self.session.getDocument().applyDeltas(deltas);
+      self.suppress = false;
+
+      this.logger.log('*remote*: session value');
+      this.logger.log(JSON.stringify(this.session.getValue()));
+      this.logger.log('*remote*: delta applied');
+    } catch {
+      this.onError && this.onError(err);
     }
+  }
 
-    const deltas = this.opTransform(ops);
-    this.logger.log(`*remote*: op received: ${JSON.stringify(ops)}`);
-    this.logger.log(`*remote*: transformed delta: ${JSON.stringify(deltas)}`);
-
-    self.suppress = true;
-    self.session.getDocument().applyDeltas(deltas);
-    self.suppress = false;
-
-    this.logger.log('*remote*: session value');
-    this.logger.log(JSON.stringify(this.session.getValue()));
-    this.logger.log('*remote*: delta applied');
+  /**
+   * Handles document load event. Called when there is a transform error and
+   * ShareDB reloads the document.
+   */
+  onRemoteReload() {
+    this.logger.log('*remote*: reloading document');
+    this.setInitialValue();
   }
 }
 
