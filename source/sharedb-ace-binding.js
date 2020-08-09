@@ -157,12 +157,12 @@ class SharedbAceBinding {
         if (lines.length === 1) {
           end = {
             row: start.row,
-            column: start.column + op.si.length,
+            column: start.column + op.si.length
           };
         } else {
           end = {
             row: start.row + (lines.length - 1),
-            column: lines[lines.length - 1].length,
+            column: lines[lines.length - 1].length
           };
         }
       } else {
@@ -173,7 +173,7 @@ class SharedbAceBinding {
         start,
         end,
         action,
-        lines,
+        lines
       };
 
       return delta;
