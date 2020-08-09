@@ -50,7 +50,7 @@ class SharedbAceBinding {
     this.doc = options.doc;
     this.pluginWS = options.pluginWS;
     this.plugins = options.plugins || [];
-    this.logger = new Logdown({ prefix: 'shareace' });
+    this.logger = new Logdown('shareace');
 
     if (process.env.NODE_ENV === 'production') {
       Logdown.disable('*');
