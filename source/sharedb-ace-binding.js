@@ -52,6 +52,14 @@ class SharedbAceBinding {
     this.plugins = options.plugins || [];
     this.onError = options.onError;
     this.logger = new Logdown('shareace');
+    // this.clientId = options.clientId; //readOnly setting
+    if (options.doc.data.options.readOnly) {
+      if (options.clientId == options.doc.data.ownerId) {
+        this.readOnly = false;
+      } else {
+        this.readOnly = true;
+      }
+    }
 
     // Initialize plugins
     this.plugins.forEach((plugin) => {
@@ -79,6 +87,9 @@ class SharedbAceBinding {
   setInitialValue() {
     this.suppress = true;
     this.session.setValue(traverse(this.doc.data, this.path));
+    this.editor.setOptions({
+      readOnly: this.readOnly //this.doc.data.options.readOnly;
+    });
     this.suppress = false;
   }
 

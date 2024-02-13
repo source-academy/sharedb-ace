@@ -32,10 +32,12 @@ class SharedbAce extends EventEmitter {
    * @param {string} options.WsUrl - Websocket URL for ShareDB
    * @param {string} options.pluginWsUrl - Websocket URL for extra plugins
    * (different port from options.WsUrl)
+   * @param {boolean} options.clientId - newly added client id for ShareAce instance
    */
   constructor(id, options) {
     super();
     this.id = id;
+    this.clientId = options.clientId;
     if (options.pluginWsUrl !== null) {
       this.pluginWS = new WebSocket(options.pluginWsUrl);
     }
@@ -52,7 +54,6 @@ class SharedbAce extends EventEmitter {
     }
     const namespace = options.namespace;
     const doc = connection.get(namespace, id);
-
     // Fetches once from the server, and fires events
     // on subsequent document changes
     const docSubscribed = (err) => {
@@ -68,11 +69,12 @@ class SharedbAce extends EventEmitter {
 
       this.emit('ready');
     };
-
+    
     doc.subscribe(docSubscribed);
-
     this.doc = doc;
     this.connections = {};
+    console.log(doc);
+    console.log(doc.data);
   }
 
   /**
@@ -94,6 +96,7 @@ class SharedbAce extends EventEmitter {
       path: sharePath,
       pluginWS: this.pluginWS,
       id: this.id,
+      clientId: this.clientId,
       plugins,
       onError: (error) => this.emit('error', path, error)
     });
