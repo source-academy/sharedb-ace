@@ -29,6 +29,7 @@ class SharedbAceBinding {
    * sharedb-ace plugins
    * @param {string[]} options.path - A lens, describing the nesting
    * to the JSON document. It should point to a string.
+   * @param {boolean} options.readOnly - whether the session is read-only
    * @param {Object[]} options.plugins - array of sharedb-ace plugins
    * @param {?function} options.onError - a callback on error
    * @example
@@ -52,19 +53,16 @@ class SharedbAceBinding {
     this.plugins = options.plugins || [];
     this.onError = options.onError;
     this.logger = new Logdown('shareace');
-    // this.clientId = options.clientId; //readOnly setting
-    if (options.doc.data.options.readOnly) {
-      if (options.clientId == options.doc.data.ownerId) {
-        this.readOnly = false;
-      } else {
-        this.readOnly = true;
-      }
-    }
 
     // Initialize plugins
     this.plugins.forEach((plugin) => {
       plugin(this.pluginWS, this.editor);
     });
+
+    // Sets the editor to read-only if necessary
+    this.editor.setOptions({
+      readOnly: options.readOnly
+    })
 
     // When ops are applied to sharedb, ace emits edit events.
     // This events need to be suppressed to prevent infinite looping
@@ -87,9 +85,6 @@ class SharedbAceBinding {
   setInitialValue() {
     this.suppress = true;
     this.session.setValue(traverse(this.doc.data, this.path));
-    this.editor.setOptions({
-      readOnly: this.readOnly //this.doc.data.options.readOnly;
-    });
     this.suppress = false;
   }
 

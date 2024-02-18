@@ -32,12 +32,12 @@ class SharedbAce extends EventEmitter {
    * @param {string} options.WsUrl - Websocket URL for ShareDB
    * @param {string} options.pluginWsUrl - Websocket URL for extra plugins
    * (different port from options.WsUrl)
-   * @param {boolean} options.clientId - newly added client id for ShareAce instance
+   * @param {boolean} options.readOnly - whether the session is read-only
    */
   constructor(id, options) {
     super();
     this.id = id;
-    this.clientId = options.clientId;
+    this.readOnly = options.readOnly
     if (options.pluginWsUrl !== null) {
       this.pluginWS = new WebSocket(options.pluginWsUrl);
     }
@@ -73,8 +73,6 @@ class SharedbAce extends EventEmitter {
     doc.subscribe(docSubscribed);
     this.doc = doc;
     this.connections = {};
-    console.log(doc);
-    console.log(doc.data);
   }
 
   /**
@@ -95,8 +93,7 @@ class SharedbAce extends EventEmitter {
       doc: this.doc,
       path: sharePath,
       pluginWS: this.pluginWS,
-      id: this.id,
-      clientId: this.clientId,
+      readOnly: this.readOnly,
       plugins,
       onError: (error) => this.emit('error', path, error)
     });
