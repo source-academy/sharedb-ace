@@ -93,6 +93,7 @@ class SharedbAce extends EventEmitter {
       doc: this.doc,
       path: sharePath,
       pluginWS: this.pluginWS,
+      id: this.id,
       readOnly: this.readOnly,
       plugins,
       onError: (error) => this.emit('error', path, error)
