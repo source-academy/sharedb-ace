@@ -25,6 +25,8 @@ class SharedbAceBinding {
    * @param {Object} options - contains all parameters
    * @param {Object} options.ace - ace editor instance
    * @param {Object} options.doc - ShareDB document
+   * @param {Object} options.docPresence - information of other users
+   * in this document, including cursor positions
    * @param {Object} options.pluginWS - WebSocket connection for
    * sharedb-ace plugins
    * @param {string[]} options.path - A lens, describing the nesting
@@ -35,6 +37,7 @@ class SharedbAceBinding {
    * const binding = new SharedbAceBinding({
    *   ace: aceInstance,
    *   doc: sharedbDoc,
+   *   docPresence: docPresence,
    *   path: ["path"],
    *   plugins: [ SharedbAceMultipleCursors ],
    *   pluginWS: "http://localhost:3108/ws",
@@ -48,10 +51,15 @@ class SharedbAceBinding {
     this.newline = this.session.getDocument().getNewLineCharacter();
     this.path = options.path;
     this.doc = options.doc;
+    this.docPresence = options.docPresence;
     this.pluginWS = options.pluginWS;
     this.plugins = options.plugins || [];
     this.onError = options.onError;
     this.logger = new Logdown('shareace');
+
+    // Temporary storage for cursors
+    // TODO: create new class for this and store all cursors
+    this.remoteCursors = { row: undefined, column: undefined };
 
     // Initialize plugins
     this.plugins.forEach((plugin) => {
@@ -68,8 +76,17 @@ class SharedbAceBinding {
     // Event Listeners
     this.$onLocalChange = this.onLocalChange.bind(this);
     this.$onRemoteChange = this.onRemoteChange.bind(this);
+
+    this.$onDocPresenceUpdate = this.onDocPresenceUpdate.bind(this);
+    this.$onLocalCursorChange = this.onLocalCursorChange.bind(this);
+
+    this.$initializeLocalPresence = this.initializeLocalPresence.bind(this);
+    this.$updateLocalPresence = this.updateLocalPresence.bind(this);
+    this.$destroyLocalPresence = this.destroyLocalPresence.bind(this);
+
     this.$onRemoteReload = this.onRemoteReload.bind(this);
 
+    // Listen to edit changes and cursor position changes
     this.listen();
   }
 
@@ -80,6 +97,11 @@ class SharedbAceBinding {
     this.suppress = true;
     this.session.setValue(traverse(this.doc.data, this.path));
     this.suppress = false;
+
+    if (this.localDocPresence !== undefined) {
+      this.$destroyLocalPresence();
+    }
+    this.$initializeLocalPresence();
   }
 
   /**
@@ -89,6 +111,9 @@ class SharedbAceBinding {
     this.session.on('change', this.$onLocalChange);
     this.doc.on('op', this.$onRemoteChange);
     this.doc.on('load', this.$onRemoteReload);
+
+    this.docPresence.on('receive', this.$onDocPresenceUpdate); // TODO: test if this receives local updates as well (we don't want this)
+    this.session.selection.on('changeCursor', this.$onLocalCursorChange);
   }
 
   /**
@@ -98,6 +123,10 @@ class SharedbAceBinding {
     this.session.removeListener('change', this.$onLocalChange);
     this.doc.off('op', this.$onRemoteChange);
     this.doc.off('load', this.$onRemoteReload);
+
+    this.$destroyLocalPresence();
+    this.docPresence.off('receive', this.$onDocPresenceUpdate);
+    this.session.selection.off('changeCursor', this.$onLocalCursorChange);
   }
 
   /**
@@ -258,6 +287,38 @@ class SharedbAceBinding {
     } catch (err) {
       this.onError && this.onError(err);
     }
+  }
+
+  onDocPresenceUpdate(id, update) {
+    // TODO: separate into multiple handlers
+    if (update === null) {
+      // The remote client is no longer present in the document
+      this.remoteCursors = { row: undefined, column: undefined };
+    } else {
+      this.remoteCursors.row = update.row;
+      this.remoteCursors.column = update.column;
+    }
+  }
+
+  onLocalCursorChange() {
+    const pos = this.session.selection.getCursor();
+    this.updateLocalPresence(pos);
+  }
+
+  initializeLocalPresence() {
+    this.localDocPresence = this.docPresence.create();
+    const presence = this.session.selection.getCursor(); // TODO
+    this.localDocPresence.submit(presence); // TODO: error handling
+  }
+
+  updateLocalPresence(update) {
+    // TODO: this is only for updating the cursor
+    this.localDocPresence.submit(update);
+  }
+
+  destroyLocalPresence() {
+    this.localDocPresence.destroy(); // TODO: error handling
+    this.localDocPresence = undefined;
   }
 
   /**
