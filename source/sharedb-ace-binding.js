@@ -5,6 +5,7 @@
  * @license MIT
  */
 
+import EventEmitter from 'event-emitter-es6';
 import Logdown from 'logdown';
 
 function traverse(object, path) {
@@ -14,7 +15,7 @@ function traverse(object, path) {
   return object;
 }
 
-class SharedbAceBinding {
+class SharedbAceBinding extends EventEmitter {
   /**
    * Constructs the binding object.
    *
@@ -44,6 +45,7 @@ class SharedbAceBinding {
    * })
    */
   constructor(options) {
+    super();
     this.editor = options.ace;
     this.editor.id = `${options.id}-${options.path}`;
     this.editor.$blockScrolling = Infinity;
@@ -298,6 +300,8 @@ class SharedbAceBinding {
       this.remoteCursors.row = update.row;
       this.remoteCursors.column = update.column;
     }
+
+    this.emit('docPresenceUpdate');
   }
 
   onLocalCursorChange() {
