@@ -301,7 +301,7 @@ class SharedbAceBinding extends EventEmitter {
       this.remoteCursors.column = update.column;
     }
 
-    this.emit('docPresenceUpdate', update);
+    this.emit('usersPresenceUpdate', update);
   }
 
   onLocalCursorChange() {
