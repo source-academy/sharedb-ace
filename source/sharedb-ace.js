@@ -72,11 +72,11 @@ class SharedbAce extends EventEmitter {
     doc.subscribe(docSubscribed);
 
     // ShareDB presence to update cursor positions
-    const docPresence = connection.getDocPresence(namespace, id);
-    docPresence.subscribe();
+    const usersPresence = connection.getPresence('users');
+    usersPresence.subscribe();
 
     this.doc = doc;
-    this.docPresence = docPresence;
+    this.usersPresence = usersPresence;
     this.connections = {};
   }
 
@@ -96,7 +96,7 @@ class SharedbAce extends EventEmitter {
     const binding = new SharedbAceBinding({
       ace,
       doc: this.doc,
-      docPresence: this.docPresence,
+      usersPresence: this.usersPresence,
       path: sharePath,
       pluginWS: this.pluginWS,
       id: this.id,

@@ -26,8 +26,8 @@ class SharedbAceBinding extends EventEmitter {
    * @param {Object} options - contains all parameters
    * @param {Object} options.ace - ace editor instance
    * @param {Object} options.doc - ShareDB document
-   * @param {Object} options.docPresence - information of other users
-   * in this document, including cursor positions
+   * @param {Object} options.usersPresence - ShareDB presence channel
+   * containing information of the users, including cursor positions
    * @param {Object} options.pluginWS - WebSocket connection for
    * sharedb-ace plugins
    * @param {string[]} options.path - A lens, describing the nesting
@@ -38,7 +38,7 @@ class SharedbAceBinding extends EventEmitter {
    * const binding = new SharedbAceBinding({
    *   ace: aceInstance,
    *   doc: sharedbDoc,
-   *   docPresence: docPresence,
+   *   usersPresence: usersPresence,
    *   path: ["path"],
    *   plugins: [ SharedbAceMultipleCursors ],
    *   pluginWS: "http://localhost:3108/ws",
@@ -53,7 +53,7 @@ class SharedbAceBinding extends EventEmitter {
     this.newline = this.session.getDocument().getNewLineCharacter();
     this.path = options.path;
     this.doc = options.doc;
-    this.docPresence = options.docPresence;
+    this.usersPresence = options.usersPresence;
     this.pluginWS = options.pluginWS;
     this.plugins = options.plugins || [];
     this.onError = options.onError;
@@ -72,21 +72,21 @@ class SharedbAceBinding extends EventEmitter {
     // This events need to be suppressed to prevent infinite looping
     this.suppress = false;
 
-    // Set value of ace document to ShareDB document value
-    this.setInitialValue();
-
     // Event Listeners
     this.$onLocalChange = this.onLocalChange.bind(this);
     this.$onRemoteChange = this.onRemoteChange.bind(this);
 
-    this.$onDocPresenceUpdate = this.onDocPresenceUpdate.bind(this);
+    this.$onRemotePresenceUpdate = this.onRemotePresenceUpdate.bind(this);
     this.$onLocalCursorChange = this.onLocalCursorChange.bind(this);
 
-    this.$initializeLocalPresence = this.initializeLocalPresence.bind(this);
-    this.$updateLocalPresence = this.updateLocalPresence.bind(this);
-    this.$destroyLocalPresence = this.destroyLocalPresence.bind(this);
+    this.$initializePresence = this.initializePresence.bind(this);
+    this.$updatePresence = this.updatePresence.bind(this);
+    this.$destroyPresence = this.destroyPresence.bind(this);
 
     this.$onRemoteReload = this.onRemoteReload.bind(this);
+
+    // Set value of ace document to ShareDB document value
+    this.setInitialValue();
 
     // Listen to edit changes and cursor position changes
     this.listen();
@@ -100,10 +100,10 @@ class SharedbAceBinding extends EventEmitter {
     this.session.setValue(traverse(this.doc.data, this.path));
     this.suppress = false;
 
-    if (this.localDocPresence !== undefined) {
-      this.$destroyLocalPresence();
+    if (this.localPresence !== undefined) {
+      this.$destroyPresence();
     }
-    this.$initializeLocalPresence();
+    this.$initializePresence();
   }
 
   /**
@@ -114,7 +114,7 @@ class SharedbAceBinding extends EventEmitter {
     this.doc.on('op', this.$onRemoteChange);
     this.doc.on('load', this.$onRemoteReload);
 
-    this.docPresence.on('receive', this.$onDocPresenceUpdate); // TODO: test if this receives local updates as well (we don't want this)
+    this.usersPresence.on('receive', this.$onRemotePresenceUpdate); // TODO: test if this receives local updates as well (we don't want this)
     this.session.selection.on('changeCursor', this.$onLocalCursorChange);
   }
 
@@ -126,8 +126,8 @@ class SharedbAceBinding extends EventEmitter {
     this.doc.off('op', this.$onRemoteChange);
     this.doc.off('load', this.$onRemoteReload);
 
-    this.$destroyLocalPresence();
-    this.docPresence.off('receive', this.$onDocPresenceUpdate);
+    this.$destroyPresence();
+    this.usersPresence.off('receive', this.$onRemotePresenceUpdate);
     this.session.selection.off('changeCursor', this.$onLocalCursorChange);
   }
 
@@ -291,7 +291,7 @@ class SharedbAceBinding extends EventEmitter {
     }
   }
 
-  onDocPresenceUpdate(id, update) {
+  onRemotePresenceUpdate(id, update) {
     // TODO: separate into multiple handlers
     if (update === null) {
       // The remote client is no longer present in the document
@@ -301,28 +301,28 @@ class SharedbAceBinding extends EventEmitter {
       this.remoteCursors.column = update.column;
     }
 
-    this.emit('docPresenceUpdate');
+    this.emit('docPresenceUpdate', update);
   }
 
   onLocalCursorChange() {
     const pos = this.session.selection.getCursor();
-    this.updateLocalPresence(pos);
+    this.updatePresence(pos);
   }
 
-  initializeLocalPresence() {
-    this.localDocPresence = this.docPresence.create();
-    const presence = this.session.selection.getCursor(); // TODO
-    this.localDocPresence.submit(presence); // TODO: error handling
+  initializePresence() {
+    this.localPresence = this.usersPresence.create();
+    const localPresence = this.session.selection.getCursor(); // TODO
+    this.localPresence.submit(localPresence); // TODO: error handling
   }
 
-  updateLocalPresence(update) {
+  updatePresence(update) {
     // TODO: this is only for updating the cursor
-    this.localDocPresence.submit(update);
+    this.localPresence.submit(update);
   }
 
-  destroyLocalPresence() {
-    this.localDocPresence.destroy(); // TODO: error handling
-    this.localDocPresence = undefined;
+  destroyPresence() {
+    this.localPresence.destroy(); // TODO: error handling
+    this.localPresence = undefined;
   }
 
   /**
