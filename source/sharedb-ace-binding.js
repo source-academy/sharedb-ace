@@ -58,10 +58,13 @@ class SharedbAceBinding extends EventEmitter {
     this.plugins = options.plugins || [];
     this.onError = options.onError;
     this.logger = new Logdown('shareace');
+    
+    // New
+    this.userId = 1;
 
     // Temporary storage for cursors
     // TODO: create new class for this and store all cursors
-    this.remoteCursors = { row: undefined, column: undefined };
+    this.remoteCursor = {row: undefined, column: undefined};
 
     // Initialize plugins
     this.plugins.forEach((plugin) => {
@@ -84,10 +87,11 @@ class SharedbAceBinding extends EventEmitter {
     this.$destroyPresence = this.destroyPresence.bind(this);
 
     this.$onRemoteReload = this.onRemoteReload.bind(this);
-
+    
     // Set value of ace document to ShareDB document value
     this.setInitialValue();
 
+   
     // Listen to edit changes and cursor position changes
     this.listen();
   }
@@ -295,13 +299,13 @@ class SharedbAceBinding extends EventEmitter {
     // TODO: separate into multiple handlers
     if (update === null) {
       // The remote client is no longer present in the document
-      this.remoteCursors = { row: undefined, column: undefined };
+      this.remoteCursor = { row: undefined, column: undefined };
+      this.emit('userLeft', id);
     } else {
-      this.remoteCursors.row = update.row;
-      this.remoteCursors.column = update.column;
+      this.remoteCursor.row = update.row;
+      this.remoteCursor.column = update.column;
+      this.emit('usersPresenceUpdate', id, update);
     }
-
-    this.emit('usersPresenceUpdate', update);
   }
 
   onLocalCursorChange() {
