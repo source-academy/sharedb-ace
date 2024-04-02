@@ -86,7 +86,6 @@ class SharedbAceBinding extends EventEmitter {
     // Set value of ace document to ShareDB document value
     this.setInitialValue();
 
-   
     // Listen to edit changes and cursor position changes
     this.listen();
   }
@@ -99,11 +98,10 @@ class SharedbAceBinding extends EventEmitter {
     this.session.setValue(traverse(this.doc.data, this.path));
     this.suppress = false;
 
-    if (this.localPresence !== undefined) {
-      this.$destroyPresence();
-    }
-    console.log(this.usersPresence.remotePresences);
     this.$initializePresence();
+    for (const [id, update] of Object.entries(this.usersPresence.remotePresences)) {
+      this.initializeRemotePresence(id, update);
+    }
   }
 
   /**
@@ -114,7 +112,7 @@ class SharedbAceBinding extends EventEmitter {
     this.doc.on('op', this.$onRemoteChange);
     this.doc.on('load', this.$onRemoteReload);
 
-    this.usersPresence.on('receive', this.$onRemotePresenceUpdate); // TODO: test if this receives local updates as well (we don't want this)
+    this.usersPresence.on('receive', this.$onRemotePresenceUpdate);
     this.session.selection.on('changeCursor', this.$onLocalCursorChange);
   }
 
@@ -126,7 +124,6 @@ class SharedbAceBinding extends EventEmitter {
     this.doc.off('op', this.$onRemoteChange);
     this.doc.off('load', this.$onRemoteReload);
 
-    // this.$destroyPresence();
     this.usersPresence.off('receive', this.$onRemotePresenceUpdate);
     this.session.selection.off('changeCursor', this.$onLocalCursorChange);
   }
@@ -296,7 +293,7 @@ class SharedbAceBinding extends EventEmitter {
     if (update === null) {
       this.emit('userLeft', id);
     } else {
-      this.emit('usersPresenceUpdate', id, update);
+      this.emit('userPresenceUpdate', id, update);
     }
   }
 
@@ -309,13 +306,10 @@ class SharedbAceBinding extends EventEmitter {
     this.localPresence = this.usersPresence.create();
     const localPresence = this.session.selection.getCursor(); // TODO
     this.localPresence.submit(localPresence); // TODO: error handling
-    for(const [id, update] of Object.entries(this.usersPresence.remotePresences)) {
-      this.initializeRemotePresence(id, update);
-    }
   }
 
   initializeRemotePresence(id, update) {
-    this.emit('usersPresenceUpdate', id, update);
+    this.emit('userPresenceUpdate', id, update);
   }
 
   updatePresence(update) {
