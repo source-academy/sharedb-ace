@@ -58,13 +58,6 @@ class SharedbAceBinding extends EventEmitter {
     this.plugins = options.plugins || [];
     this.onError = options.onError;
     this.logger = new Logdown('shareace');
-    
-    // New
-    this.userId = 1;
-
-    // Temporary storage for cursors
-    // TODO: create new class for this and store all cursors
-    this.remoteCursor = {row: undefined, column: undefined};
 
     // Initialize plugins
     this.plugins.forEach((plugin) => {
@@ -83,6 +76,8 @@ class SharedbAceBinding extends EventEmitter {
     this.$onLocalCursorChange = this.onLocalCursorChange.bind(this);
 
     this.$initializePresence = this.initializePresence.bind(this);
+    this.$initializeRemotePresence = this.initializeRemotePresence.bind(this);
+
     this.$updatePresence = this.updatePresence.bind(this);
     this.$destroyPresence = this.destroyPresence.bind(this);
 
@@ -107,6 +102,7 @@ class SharedbAceBinding extends EventEmitter {
     if (this.localPresence !== undefined) {
       this.$destroyPresence();
     }
+    console.log(this.usersPresence.remotePresences);
     this.$initializePresence();
   }
 
@@ -130,7 +126,7 @@ class SharedbAceBinding extends EventEmitter {
     this.doc.off('op', this.$onRemoteChange);
     this.doc.off('load', this.$onRemoteReload);
 
-    this.$destroyPresence();
+    // this.$destroyPresence();
     this.usersPresence.off('receive', this.$onRemotePresenceUpdate);
     this.session.selection.off('changeCursor', this.$onLocalCursorChange);
   }
@@ -298,12 +294,8 @@ class SharedbAceBinding extends EventEmitter {
   onRemotePresenceUpdate(id, update) {
     // TODO: separate into multiple handlers
     if (update === null) {
-      // The remote client is no longer present in the document
-      this.remoteCursor = { row: undefined, column: undefined };
       this.emit('userLeft', id);
     } else {
-      this.remoteCursor.row = update.row;
-      this.remoteCursor.column = update.column;
       this.emit('usersPresenceUpdate', id, update);
     }
   }
@@ -317,6 +309,13 @@ class SharedbAceBinding extends EventEmitter {
     this.localPresence = this.usersPresence.create();
     const localPresence = this.session.selection.getCursor(); // TODO
     this.localPresence.submit(localPresence); // TODO: error handling
+    for(const [id, update] of Object.entries(this.usersPresence.remotePresences)) {
+      this.initializeRemotePresence(id, update);
+    }
+  }
+
+  initializeRemotePresence(id, update) {
+    this.emit('usersPresenceUpdate', id, update);
   }
 
   updatePresence(update) {
