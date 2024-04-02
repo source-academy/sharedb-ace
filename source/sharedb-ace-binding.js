@@ -26,6 +26,7 @@ class SharedbAceBinding extends EventEmitter {
    * @param {Object} options - contains all parameters
    * @param {Object} options.ace - ace editor instance
    * @param {Object} options.doc - ShareDB document
+   * @param {Object} options.user - information regarding the user
    * @param {Object} options.usersPresence - ShareDB presence channel
    * containing information of the users, including cursor positions
    * @param {Object} options.pluginWS - WebSocket connection for
@@ -38,6 +39,7 @@ class SharedbAceBinding extends EventEmitter {
    * const binding = new SharedbAceBinding({
    *   ace: aceInstance,
    *   doc: sharedbDoc,
+   *   user: { name: "User", color: "#ffffff" }
    *   usersPresence: usersPresence,
    *   path: ["path"],
    *   plugins: [ SharedbAceMultipleCursors ],
@@ -53,6 +55,7 @@ class SharedbAceBinding extends EventEmitter {
     this.newline = this.session.getDocument().getNewLineCharacter();
     this.path = options.path;
     this.doc = options.doc;
+    this.user = options.user;
     this.usersPresence = options.usersPresence;
     this.pluginWS = options.pluginWS;
     this.plugins = options.plugins || [];
@@ -289,6 +292,7 @@ class SharedbAceBinding extends EventEmitter {
   }
 
   onRemotePresenceUpdate(id, update) {
+    // TODO: logger and error handling
     // TODO: separate into multiple handlers
     if (update === null) {
       this.emit('userLeft', id);
@@ -303,22 +307,31 @@ class SharedbAceBinding extends EventEmitter {
   }
 
   initializePresence() {
+    // TODO: logger and error handling
     this.localPresence = this.usersPresence.create();
-    const localPresence = this.session.selection.getCursor(); // TODO
-    this.localPresence.submit(localPresence); // TODO: error handling
+    const cursorPos = this.session.selection.getCursor();
+    this.localPresence.submit({
+      user: this.user,
+      cursorPos: cursorPos
+    });
   }
 
   initializeRemotePresence(id, update) {
     this.emit('userPresenceUpdate', id, update);
   }
 
-  updatePresence(update) {
+  updatePresence(newCursorPos) {
+    // TODO: logger and error handling
     // TODO: this is only for updating the cursor
-    this.localPresence.submit(update);
+    this.localPresence.submit({
+      user: this.user,
+      cursorPos: newCursorPos
+    });
   }
 
   destroyPresence() {
-    this.localPresence.destroy(); // TODO: error handling
+    // TODO: logger and error handling
+    this.localPresence.destroy();
     this.localPresence = undefined;
   }
 

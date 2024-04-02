@@ -27,6 +27,9 @@ class SharedbAce extends EventEmitter {
    * @param {string} id - id of the ShareDB document
    * @param {Object} options - options object containing various
    * required configurations
+   * @param {string} options.user.name - name of the associated user
+   * @param {string} options.user.color - the hex color code associated to the
+   * user's presence
    * @param {string} options.namespace - namespace of document within
    * ShareDB, to be equal to that on the server
    * @param {string} options.WsUrl - Websocket URL for ShareDB
@@ -36,6 +39,7 @@ class SharedbAce extends EventEmitter {
   constructor(id, options) {
     super();
     this.id = id;
+    this.user = options.user;
     if (options.pluginWsUrl !== null) {
       this.pluginWS = new WebSocket(options.pluginWsUrl);
     }
@@ -96,6 +100,7 @@ class SharedbAce extends EventEmitter {
     const binding = new SharedbAceBinding({
       ace,
       doc: this.doc,
+      user: this.user,
       usersPresence: this.usersPresence,
       path: sharePath,
       pluginWS: this.pluginWS,
