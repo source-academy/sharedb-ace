@@ -5,7 +5,6 @@
  * @license MIT
  */
 
-import EventEmitter from 'event-emitter-es6';
 import Logdown from 'logdown';
 
 function traverse(object, path) {
@@ -15,7 +14,7 @@ function traverse(object, path) {
   return object;
 }
 
-class SharedbAceBinding extends EventEmitter {
+class SharedbAceBinding {
   /**
    * Constructs the binding object.
    *
@@ -27,6 +26,8 @@ class SharedbAceBinding extends EventEmitter {
    * @param {Object} options.ace - ace editor instance
    * @param {Object} options.doc - ShareDB document
    * @param {Object} options.user - information regarding the user
+   * @param {Object} options.cursorManager - the instance managing
+   * the cursors in the editor
    * @param {Object} options.usersPresence - ShareDB presence channel
    * containing information of the users, including cursor positions
    * @param {Object} options.pluginWS - WebSocket connection for
@@ -40,6 +41,7 @@ class SharedbAceBinding extends EventEmitter {
    *   ace: aceInstance,
    *   doc: sharedbDoc,
    *   user: { name: "User", color: "#ffffff" }
+   *   cursorManager: cursorManager,
    *   usersPresence: usersPresence,
    *   path: ["path"],
    *   plugins: [ SharedbAceMultipleCursors ],
@@ -47,7 +49,6 @@ class SharedbAceBinding extends EventEmitter {
    * })
    */
   constructor(options) {
-    super();
     this.editor = options.ace;
     this.editor.id = `${options.id}-${options.path}`;
     this.editor.$blockScrolling = Infinity;
@@ -56,6 +57,7 @@ class SharedbAceBinding extends EventEmitter {
     this.path = options.path;
     this.doc = options.doc;
     this.user = options.user;
+    this.cursorManager = options.cursorManager;
     this.usersPresence = options.usersPresence;
     this.pluginWS = options.pluginWS;
     this.plugins = options.plugins || [];
@@ -101,6 +103,7 @@ class SharedbAceBinding extends EventEmitter {
     this.session.setValue(traverse(this.doc.data, this.path));
     this.suppress = false;
 
+    this.cursorManager.removeAll();
     this.$initializePresence();
     for (const [id, update] of Object.entries(this.usersPresence.remotePresences)) {
       this.initializeRemotePresence(id, update);
@@ -117,6 +120,7 @@ class SharedbAceBinding extends EventEmitter {
 
     this.usersPresence.on('receive', this.$onRemotePresenceUpdate);
     this.session.selection.on('changeCursor', this.$onLocalCursorChange);
+
   }
 
   /**
@@ -295,9 +299,20 @@ class SharedbAceBinding extends EventEmitter {
     // TODO: logger and error handling
     // TODO: separate into multiple handlers
     if (update === null) {
-      this.emit('userLeft', id);
+      if (this.cursorManager.isCursorExist(id)) {
+        this.cursorManager.removeCursor(id);
+      }
     } else {
-      this.emit('userPresenceUpdate', id, update);
+      if (this.cursorManager.isCursorExist(id)) {
+        this.cursorManager.setCursor(id, update.cursorPos);
+      } else {
+        this.cursorManager.addCursor(
+          id,
+          update.user.name,
+          update.user.color,
+          update.cursorPos
+        );
+      }
     }
   }
 
@@ -317,7 +332,16 @@ class SharedbAceBinding extends EventEmitter {
   }
 
   initializeRemotePresence(id, update) {
-    this.emit('userPresenceUpdate', id, update);
+    if (this.cursorManager.isCursorExist(id)) {
+      this.cursorManager.setCursor(id, update.cursorPos);
+    } else {
+      this.cursorManager.addCursor(
+        id,
+        update.user.name,
+        update.user.color,
+        update.cursorPos
+      );
+    }
   }
 
   updatePresence(newCursorPos) {
@@ -337,7 +361,7 @@ class SharedbAceBinding extends EventEmitter {
 
   /**
    * Handles document load event. Called when there is a transform error and
-   * ShareDB reloads the document.
+   * ShareDB reloads the document, or when websocket has to reconnect.
    */
   onRemoteReload() {
     this.logger.log('*remote*: reloading document');
