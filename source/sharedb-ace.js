@@ -27,6 +27,9 @@ class SharedbAce extends EventEmitter {
    * @param {string} id - id of the ShareDB document
    * @param {Object} options - options object containing various
    * required configurations
+   * @param {string} options.user.name - name of the associated user
+   * @param {string} options.user.color - the hex color code associated to the
+   * user's presence
    * @param {string} options.namespace - namespace of document within
    * ShareDB, to be equal to that on the server
    * @param {string} options.WsUrl - Websocket URL for ShareDB
@@ -36,6 +39,7 @@ class SharedbAce extends EventEmitter {
   constructor(id, options) {
     super();
     this.id = id;
+    this.user = options.user;
     if (options.pluginWsUrl !== null) {
       this.pluginWS = new WebSocket(options.pluginWsUrl);
     }
@@ -71,8 +75,19 @@ class SharedbAce extends EventEmitter {
 
     doc.subscribe(docSubscribed);
 
+    // ShareDB presence to update cursor positions
+    const usersPresence = connection.getPresence('users-' + id);
+    usersPresence.subscribe();
+
     this.doc = doc;
+    this.usersPresence = usersPresence;
     this.connections = {};
+
+    this.WS.onopen(() => {
+      for (const conn of this.connections) {
+        conn.onRemoteReload();
+      }
+    })
   }
 
   /**
@@ -81,16 +96,20 @@ class SharedbAce extends EventEmitter {
    * adds the binding to the instance's "connections" property
    *
    * @param {Object} ace - ace editor instance
+   * @param {Object} cursorManager - cursor manager for the editor
    * @param {string[]} path - A lens, describing the nesting to the JSON document.
    * It should point to a string.
    * @param {Object[]} plugins - list of plugins to add to this particular
    * ace instance
    */
-  add(ace, path, plugins) {
+  add(ace, cursorManager, path, plugins) {
     const sharePath = path || [];
     const binding = new SharedbAceBinding({
       ace,
       doc: this.doc,
+      user: this.user,
+      cursorManager,
+      usersPresence: this.usersPresence,
       path: sharePath,
       pluginWS: this.pluginWS,
       id: this.id,

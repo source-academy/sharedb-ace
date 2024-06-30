@@ -25,6 +25,11 @@ class SharedbAceBinding {
    * @param {Object} options - contains all parameters
    * @param {Object} options.ace - ace editor instance
    * @param {Object} options.doc - ShareDB document
+   * @param {Object} options.user - information regarding the user
+   * @param {Object} options.cursorManager - the instance managing
+   * the cursors in the editor
+   * @param {Object} options.usersPresence - ShareDB presence channel
+   * containing information of the users, including cursor positions
    * @param {Object} options.pluginWS - WebSocket connection for
    * sharedb-ace plugins
    * @param {string[]} options.path - A lens, describing the nesting
@@ -35,6 +40,9 @@ class SharedbAceBinding {
    * const binding = new SharedbAceBinding({
    *   ace: aceInstance,
    *   doc: sharedbDoc,
+   *   user: { name: "User", color: "#ffffff" }
+   *   cursorManager: cursorManager,
+   *   usersPresence: usersPresence,
    *   path: ["path"],
    *   plugins: [ SharedbAceMultipleCursors ],
    *   pluginWS: "http://localhost:3108/ws",
@@ -48,6 +56,9 @@ class SharedbAceBinding {
     this.newline = this.session.getDocument().getNewLineCharacter();
     this.path = options.path;
     this.doc = options.doc;
+    this.user = options.user;
+    this.cursorManager = options.cursorManager;
+    this.usersPresence = options.usersPresence;
     this.pluginWS = options.pluginWS;
     this.plugins = options.plugins || [];
     this.onError = options.onError;
@@ -62,14 +73,25 @@ class SharedbAceBinding {
     // This events need to be suppressed to prevent infinite looping
     this.suppress = false;
 
-    // Set value of ace document to ShareDB document value
-    this.setInitialValue();
-
     // Event Listeners
     this.$onLocalChange = this.onLocalChange.bind(this);
     this.$onRemoteChange = this.onRemoteChange.bind(this);
-    this.$onRemoteReload = this.onRemoteReload.bind(this);
 
+    this.$onRemotePresenceUpdate = this.onRemotePresenceUpdate.bind(this);
+    this.$onLocalCursorChange = this.onLocalCursorChange.bind(this);
+
+    this.$initializePresence = this.initializePresence.bind(this);
+    this.$initializeRemotePresence = this.initializeRemotePresence.bind(this);
+
+    this.$updatePresence = this.updatePresence.bind(this);
+    this.$destroyPresence = this.destroyPresence.bind(this);
+
+    this.$onRemoteReload = this.onRemoteReload.bind(this);
+    
+    // Set value of ace document to ShareDB document value
+    this.setInitialValue();
+
+    // Listen to edit changes and cursor position changes
     this.listen();
   }
 
@@ -80,6 +102,12 @@ class SharedbAceBinding {
     this.suppress = true;
     this.session.setValue(traverse(this.doc.data, this.path));
     this.suppress = false;
+
+    this.cursorManager.removeAll();
+    this.$initializePresence();
+    for (const [id, update] of Object.entries(this.usersPresence.remotePresences)) {
+      this.initializeRemotePresence(id, update);
+    }
   }
 
   /**
@@ -89,6 +117,10 @@ class SharedbAceBinding {
     this.session.on('change', this.$onLocalChange);
     this.doc.on('op', this.$onRemoteChange);
     this.doc.on('load', this.$onRemoteReload);
+
+    this.usersPresence.on('receive', this.$onRemotePresenceUpdate);
+    this.session.selection.on('changeCursor', this.$onLocalCursorChange);
+
   }
 
   /**
@@ -98,6 +130,9 @@ class SharedbAceBinding {
     this.session.removeListener('change', this.$onLocalChange);
     this.doc.off('op', this.$onRemoteChange);
     this.doc.off('load', this.$onRemoteReload);
+
+    this.usersPresence.off('receive', this.$onRemotePresenceUpdate);
+    this.session.selection.off('changeCursor', this.$onLocalCursorChange);
   }
 
   /**
@@ -260,9 +295,73 @@ class SharedbAceBinding {
     }
   }
 
+  onRemotePresenceUpdate(id, update) {
+    // TODO: logger and error handling
+    // TODO: separate into multiple handlers
+    if (update === null) {
+      if (this.cursorManager.isCursorExist(id)) {
+        this.cursorManager.removeCursor(id);
+      }
+    } else {
+      if (this.cursorManager.isCursorExist(id)) {
+        this.cursorManager.setCursor(id, update.cursorPos);
+      } else {
+        this.cursorManager.addCursor(
+          id,
+          update.user.name,
+          update.user.color,
+          update.cursorPos
+        );
+      }
+    }
+  }
+
+  onLocalCursorChange() {
+    const pos = this.session.selection.getCursor();
+    this.updatePresence(pos);
+  }
+
+  initializePresence() {
+    // TODO: logger and error handling
+    this.localPresence = this.usersPresence.create();
+    const cursorPos = this.session.selection.getCursor();
+    this.localPresence.submit({
+      user: this.user,
+      cursorPos: cursorPos
+    });
+  }
+
+  initializeRemotePresence(id, update) {
+    if (this.cursorManager.isCursorExist(id)) {
+      this.cursorManager.setCursor(id, update.cursorPos);
+    } else {
+      this.cursorManager.addCursor(
+        id,
+        update.user.name,
+        update.user.color,
+        update.cursorPos
+      );
+    }
+  }
+
+  updatePresence(newCursorPos) {
+    // TODO: logger and error handling
+    // TODO: this is only for updating the cursor
+    this.localPresence.submit({
+      user: this.user,
+      cursorPos: newCursorPos
+    });
+  }
+
+  destroyPresence() {
+    // TODO: logger and error handling
+    this.localPresence.destroy();
+    this.localPresence = undefined;
+  }
+
   /**
    * Handles document load event. Called when there is a transform error and
-   * ShareDB reloads the document.
+   * ShareDB reloads the document, or when websocket has to reconnect.
    */
   onRemoteReload() {
     this.logger.log('*remote*: reloading document');
