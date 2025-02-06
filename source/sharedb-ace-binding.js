@@ -299,13 +299,14 @@ class SharedbAceBinding {
     // TODO: logger and error handling
     // TODO: separate into multiple handlers
     if (update === null) {
-      if (this.cursorManager.isCursorExist(id)) {
+      try {
         this.cursorManager.removeCursor(id);
-      }
+      // eslint-disable-next-line no-empty
+      } catch {}
     } else {
-      if (this.cursorManager.isCursorExist(id)) {
+      try {
         this.cursorManager.setCursor(id, update.cursorPos);
-      } else {
+      } catch {
         this.cursorManager.addCursor(
           id,
           update.user.name,
@@ -332,9 +333,9 @@ class SharedbAceBinding {
   }
 
   initializeRemotePresence(id, update) {
-    if (this.cursorManager.isCursorExist(id)) {
+    try {
       this.cursorManager.setCursor(id, update.cursorPos);
-    } else {
+    } catch {
       this.cursorManager.addCursor(
         id,
         update.user.name,
