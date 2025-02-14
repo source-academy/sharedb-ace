@@ -97,18 +97,20 @@ class SharedbAce extends EventEmitter {
    *
    * @param {Object} ace - ace editor instance
    * @param {Object} cursorManager - cursor manager for the editor
+   * @param {Object} selectionManager - selection manager for the editor
    * @param {string[]} path - A lens, describing the nesting to the JSON document.
    * It should point to a string.
    * @param {Object[]} plugins - list of plugins to add to this particular
    * ace instance
    */
-  add(ace, cursorManager, path, plugins) {
+  add(ace, cursorManager, selectionManager, path, plugins) {
     const sharePath = path || [];
     const binding = new SharedbAceBinding({
       ace,
       doc: this.doc,
       user: this.user,
       cursorManager,
+      selectionManager,
       usersPresence: this.usersPresence,
       path: sharePath,
       pluginWS: this.pluginWS,

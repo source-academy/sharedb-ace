@@ -35,6 +35,7 @@
     "webpack-cli": "^5.1.4"
   },
   "dependencies": {
+    "@convergencelabs/ace-collab-ext": "^0.6.0",
     "event-emitter-es6": "^1.1.5",
     "logdown": "^3.3.1",
     "reconnecting-websocket": "^4.4.0",

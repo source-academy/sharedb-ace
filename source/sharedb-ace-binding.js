@@ -6,6 +6,7 @@
  */
 
 import Logdown from 'logdown';
+import { AceRangeUtil } from '@convergencelabs/ace-collab-ext';
 
 function traverse(object, path) {
   for (const key of path) {
@@ -28,6 +29,8 @@ class SharedbAceBinding {
    * @param {Object} options.user - information regarding the user
    * @param {Object} options.cursorManager - the instance managing
    * the cursors in the editor
+   * @param {Object} options.selectionManager - the instance managing
+   * the selections in the editor
    * @param {Object} options.usersPresence - ShareDB presence channel
    * containing information of the users, including cursor positions
    * @param {Object} options.pluginWS - WebSocket connection for
@@ -42,6 +45,7 @@ class SharedbAceBinding {
    *   doc: sharedbDoc,
    *   user: { name: "User", color: "#ffffff" }
    *   cursorManager: cursorManager,
+   *   selectionManager: selectionManager,
    *   usersPresence: usersPresence,
    *   path: ["path"],
    *   plugins: [ SharedbAceMultipleCursors ],
@@ -58,6 +62,7 @@ class SharedbAceBinding {
     this.doc = options.doc;
     this.user = options.user;
     this.cursorManager = options.cursorManager;
+    this.selectionManager = options.selectionManager;
     this.usersPresence = options.usersPresence;
     this.pluginWS = options.pluginWS;
     this.plugins = options.plugins || [];
@@ -79,15 +84,17 @@ class SharedbAceBinding {
 
     this.$onRemotePresenceUpdate = this.onRemotePresenceUpdate.bind(this);
     this.$onLocalCursorChange = this.onLocalCursorChange.bind(this);
+    this.$onLocalSelectionChange = this.onLocalSelectionChange.bind(this);
 
     this.$initializePresence = this.initializePresence.bind(this);
     this.$initializeRemotePresence = this.initializeRemotePresence.bind(this);
 
-    this.$updatePresence = this.updatePresence.bind(this);
+    this.$updateCursorPresence = this.updateCursorPresence.bind(this);
+    this.$updateSelectionPresence = this.updateSelectionPresence.bind(this);
     this.$destroyPresence = this.destroyPresence.bind(this);
 
     this.$onRemoteReload = this.onRemoteReload.bind(this);
-    
+
     // Set value of ace document to ShareDB document value
     this.setInitialValue();
 
@@ -104,6 +111,7 @@ class SharedbAceBinding {
     this.suppress = false;
 
     this.cursorManager.removeAll();
+    this.selectionManager.removeAll();
     this.$initializePresence();
     for (const [id, update] of Object.entries(this.usersPresence.remotePresences)) {
       this.initializeRemotePresence(id, update);
@@ -120,7 +128,7 @@ class SharedbAceBinding {
 
     this.usersPresence.on('receive', this.$onRemotePresenceUpdate);
     this.session.selection.on('changeCursor', this.$onLocalCursorChange);
-
+    this.session.selection.on('changeSelection', this.$onLocalSelectionChange);
   }
 
   /**
@@ -133,6 +141,7 @@ class SharedbAceBinding {
 
     this.usersPresence.off('receive', this.$onRemotePresenceUpdate);
     this.session.selection.off('changeCursor', this.$onLocalCursorChange);
+    this.session.selection.off('changeSelection', this.$onLocalSelectionChange);
   }
 
   /**
@@ -301,34 +310,52 @@ class SharedbAceBinding {
     if (update === null) {
       try {
         this.cursorManager.removeCursor(id);
-      // eslint-disable-next-line no-empty
+        // eslint-disable-next-line no-empty
+      } catch {}
+
+      try {
+        this.selectionManager.removeSelection(id);
+        // eslint-disable-next-line no-empty
       } catch {}
     } else {
-      try {
-        this.cursorManager.setCursor(id, update.cursorPos);
-      } catch {
-        this.cursorManager.addCursor(
-          id,
-          update.user.name,
-          update.user.color,
-          update.cursorPos
-        );
+      if (update.cursorPos) {
+        try {
+          this.cursorManager.setCursor(id, update.cursorPos);
+        } catch {
+          this.cursorManager.addCursor(id, update.user.name, update.user.color, update.cursorPos);
+        }
+      }
+
+      if (update.ranges) {
+        const ranges = AceRangeUtil.fromJson(update.ranges);
+        try {
+          this.selectionManager.setSelection(id, ranges);
+        } catch {
+          this.selectionManager.addSelection(id, update.user.name, update.user.color, ranges);
+        }
       }
     }
   }
 
   onLocalCursorChange() {
     const pos = this.session.selection.getCursor();
-    this.updatePresence(pos);
+    this.updateCursorPresence(pos);
+  }
+
+  onLocalSelectionChange() {
+    const ranges = this.session.selection.getAllRanges();
+    this.updateSelectionPresence(AceRangeUtil.toJson(ranges));
   }
 
   initializePresence() {
     // TODO: logger and error handling
     this.localPresence = this.usersPresence.create();
     const cursorPos = this.session.selection.getCursor();
+    const ranges = this.session.selection.getAllRanges();
     this.localPresence.submit({
       user: this.user,
-      cursorPos: cursorPos
+      cursorPos,
+      ranges
     });
   }
 
@@ -336,21 +363,29 @@ class SharedbAceBinding {
     try {
       this.cursorManager.setCursor(id, update.cursorPos);
     } catch {
-      this.cursorManager.addCursor(
-        id,
-        update.user.name,
-        update.user.color,
-        update.cursorPos
-      );
+      this.cursorManager.addCursor(id, update.user.name, update.user.color, update.cursorPos);
+    }
+
+    try {
+      this.selectionManager.setSelection(id, update.ranges);
+    } catch {
+      this.selectionManager.addSelection(id, update.user.name, update.user.color, update.ranges);
     }
   }
 
-  updatePresence(newCursorPos) {
+  updateCursorPresence(newCursorPos) {
     // TODO: logger and error handling
-    // TODO: this is only for updating the cursor
     this.localPresence.submit({
       user: this.user,
       cursorPos: newCursorPos
+    });
+  }
+
+  updateSelectionPresence(newRanges) {
+    // TODO: logger and error handling
+    this.localPresence.submit({
+      user: this.user,
+      ranges: newRanges
     });
   }
 
