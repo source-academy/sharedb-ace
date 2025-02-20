@@ -1,5 +1,7 @@
 * Sharedb-ace
-[[https://badge.fury.io/js/sharedb-ace.svg]]
+[[https://badge.fury.io/js/@sourceacademy%2Fsharedb-ace.svg]]
+
+This is a fork of the [[https://github.com/jethrokuan/sharedb-ace][original sharedb-ace repository]].
 
 Sharedb-ace provides two-way bindings between [[https://github.com/share/sharedb][ShareDB]] and [[http://ace.c9.io/][Ace Editor]].
 
@@ -7,7 +9,7 @@ Sharedb-ace provides two-way bindings between [[https://github.com/share/sharedb
 Using npm:
 
 #+BEGIN_SRC sh
-npm install sharedb-ace
+npm install @sourceacademy/sharedb-ace
 #+END_SRC
 
 Using pre-compiled js from unpkg CDN:
@@ -17,7 +19,6 @@ Using pre-compiled js from unpkg CDN:
 #+END_SRC
 
 ** Documentation
-Please see [[http://www.jethrokuan.com/sharedb-ace/][here]] for internals documentation.
 
 *** Single Ace-editor Instance
 Setup the ShareDB document as a string:
@@ -52,8 +53,21 @@ git clone https://github.com/jethrokuan/sharedb-ace.git
 #+END_SRC
 
 #+BEGIN_SRC sh
-cd sharedb-ace && npm install
+cd sharedb-ace && yarn install
 #+END_SRC
+
+To test the package locally, run the following on this sharedb-ace repository:
+#+BEGIN_SRC sh
+yarn build
+yarn link
+#+END_SRC
+
+Then, run the following on the frontend repository:
+#+BEGIN_SRC sh
+yarn link @sourceacademy/sharedb-ace
+#+END_SRC
+
+Now, whenever you want to update the ShareDB Ace binding, simply run `yarn build`.
 
 *** Generating JS Docs
 We generate javascript documentation using inline documentation.
