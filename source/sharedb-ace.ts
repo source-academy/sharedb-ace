@@ -5,7 +5,7 @@
  * @license MIT
  */
 
-import WebSocket from 'reconnecting-websocket';
+import { WebSocket } from 'partysocket';
 import EventEmitter from 'event-emitter-es6';
 import type sharedb from 'sharedb/lib/sharedb';
 import { Connection as sharedbConnection } from 'sharedb/lib/client';

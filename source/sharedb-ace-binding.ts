@@ -7,10 +7,7 @@
 
 // TODO: support reconnects with same id
 
-// TODO: We keep getting:
-// connection to 'ws...' failed: Invalid frame header
-
-import WebSocket from 'reconnecting-websocket';
+import { WebSocket } from 'partysocket';
 import Logdown from 'logdown';
 import sharedb from 'sharedb/lib/sharedb';
 import type {
@@ -155,7 +152,7 @@ class SharedbAceBinding {
     // this.radarManager.removeView();
     this.initializeLocalPresence();
     for (const [id, update] of Object.entries(this.usersPresence.remotePresences)) {
-      this.initializeRemotePresence(id, update);
+      this.updatePresence(id, update);
     }
   };
 
@@ -164,12 +161,13 @@ class SharedbAceBinding {
    */
   listen = () => {
     // TODO: Also update view on window resize
+    // TODO: Clicking on radar indicator is not exactly accurate
     this.session.on('change', this.onLocalChange);
     this.session.on('changeScrollTop', this.onLocalChangeScrollTop);
     this.doc.on('op', this.onRemoteChange);
     this.doc.on('load', this.onRemoteReload);
 
-    this.usersPresence.on('receive', this.onPresenceUpdate);
+    this.usersPresence.on('receive', this.updatePresence);
     this.session.selection.on('changeCursor', this.onLocalCursorChange);
     this.session.selection.on('changeSelection', this.onLocalSelectionChange);
   };
@@ -183,7 +181,7 @@ class SharedbAceBinding {
     this.doc.off('op', this.onRemoteChange);
     this.doc.off('load', this.onRemoteReload);
 
-    this.usersPresence.off('receive', this.onPresenceUpdate);
+    this.usersPresence.off('receive', this.updatePresence);
     this.session.selection.off('changeCursor', this.onLocalCursorChange);
     this.session.selection.off('changeSelection', this.onLocalSelectionChange);
   };
@@ -347,7 +345,7 @@ class SharedbAceBinding {
     }
   };
 
-  onPresenceUpdate = (id: string, update: PresenceUpdate) => {
+  updatePresence = (id: string, update: PresenceUpdate) => {
     // TODO: logger and error handling
     // TODO: separate into multiple handlers
     if (update === null) {
@@ -387,19 +385,19 @@ class SharedbAceBinding {
     }
 
     if (update.radarViewRows) {
-      const intialRows = AceViewportUtil.indicesToRows(
+      const rows = AceViewportUtil.indicesToRows(
         this.editor,
         update.radarViewRows.start,
         update.radarViewRows.end
       );
       try {
-        this.radarManager.setViewRows(id, intialRows);
+        this.radarManager.setViewRows(id, rows);
       } catch {
         this.radarManager.addView(
           id,
           update.user.name,
           update.user.color,
-          intialRows,
+          rows,
           update.radarCursorRow || 0
         );
       }
@@ -449,47 +447,6 @@ class SharedbAceBinding {
       radarViewRows: initialIndices,
       radarCursorRow: cursorPos.row
     });
-  };
-
-  // TODO: Actually the same as onPresenceUpdate
-  initializeRemotePresence = (id: string, update: PresenceUpdate) => {
-    if (update.cursorPos) {
-      try {
-        this.cursorManager.setCursor(id, update.cursorPos);
-      } catch {
-        this.cursorManager.addCursor(id, update.user.name, update.user.color, update.cursorPos);
-      }
-    }
-
-    if (update.selectionRange) {
-      const ranges = AceRangeUtil.fromJson(update.selectionRange);
-      try {
-        this.selectionManager.setSelection(id, ranges);
-      } catch {
-        this.selectionManager.addSelection(id, update.user.name, update.user.color, ranges);
-      }
-    }
-
-    if (update.radarViewRows) {
-      const rows = AceViewportUtil.indicesToRows(
-        this.editor,
-        update.radarViewRows.start,
-        update.radarViewRows.end
-      );
-
-      try {
-        this.radarManager.setViewRows(id, rows);
-        this.radarManager.setCursorRow(id, update.radarCursorRow || 0);
-      } catch {
-        this.radarManager.addView(
-          id,
-          update.user.name,
-          update.user.color,
-          rows,
-          update.radarCursorRow || 0
-        );
-      }
-    }
   };
 
   destroyPresence = () => {

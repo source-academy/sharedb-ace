@@ -1,4 +1,4 @@
-import type WebSocket from 'reconnecting-websocket';
+import type { WebSocket } from 'partysocket';
 
 export interface SharedbAceUser {
   id: string;
