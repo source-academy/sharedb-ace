@@ -1,6 +1,7 @@
 import type WebSocket from 'reconnecting-websocket';
 
 export interface SharedbAceUser {
+  id: string;
   name: string;
   color: string;
 }

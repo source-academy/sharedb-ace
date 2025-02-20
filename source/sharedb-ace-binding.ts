@@ -5,15 +5,22 @@
  * @license MIT
  */
 
+// TODO: support reconnects with same id
+
+// TODO: We keep getting:
+// connection to 'ws...' failed: Invalid frame header
+
 import WebSocket from 'reconnecting-websocket';
 import Logdown from 'logdown';
 import sharedb from 'sharedb/lib/sharedb';
 import type {
   AceMultiCursorManager,
   AceMultiSelectionManager,
+  AceRadarView,
   IRangeData
 } from '@convergencelabs/ace-collab-ext';
-import { AceRangeUtil } from '@convergencelabs/ace-collab-ext';
+import { IIndexRange } from '@convergencelabs/ace-collab-ext/dist/types/IndexRange';
+import { AceViewportUtil, AceRangeUtil } from '@convergencelabs/ace-collab-ext';
 import type { Ace, EditSession } from 'ace-builds';
 import type { IAceEditor } from 'react-ace/lib/types';
 import type { SharedbAcePlugin, SharedbAceUser } from './types';
@@ -31,6 +38,7 @@ interface SharedbAceBindingOptions {
   user: SharedbAceUser;
   cursorManager: AceMultiCursorManager;
   selectionManager: AceMultiSelectionManager;
+  radarManager: AceRadarView;
   usersPresence: sharedb.Presence;
   pluginWS?: WebSocket;
   path: string[];
@@ -41,7 +49,9 @@ interface SharedbAceBindingOptions {
 interface PresenceUpdate {
   user: SharedbAceUser;
   cursorPos?: Ace.Point;
-  ranges?: IRangeData[];
+  selectionRange?: IRangeData[];
+  radarViewRows?: IIndexRange;
+  radarCursorRow?: number;
 }
 
 class SharedbAceBinding {
@@ -55,6 +65,7 @@ class SharedbAceBinding {
 
   cursorManager: AceMultiCursorManager;
   selectionManager: AceMultiSelectionManager;
+  radarManager: AceRadarView;
 
   usersPresence: sharedb.Presence;
 
@@ -64,7 +75,7 @@ class SharedbAceBinding {
   // This events need to be suppressed to prevent infinite looping
   suppress = false;
 
-  localPresence?: sharedb.LocalPresence;
+  localPresence?: sharedb.LocalPresence<PresenceUpdate>;
 
   onError: (err: unknown) => unknown;
 
@@ -112,6 +123,7 @@ class SharedbAceBinding {
     this.user = options.user;
     this.cursorManager = options.cursorManager;
     this.selectionManager = options.selectionManager;
+    this.radarManager = options.radarManager;
     this.usersPresence = options.usersPresence;
     this.onError = options.onError;
     this.logger = Logdown('shareace');
@@ -139,7 +151,9 @@ class SharedbAceBinding {
 
     this.cursorManager.removeAll();
     this.selectionManager.removeAll();
-    this.initializePresence();
+    // TODO: Remove all views for radarManager
+    // this.radarManager.removeView();
+    this.initializeLocalPresence();
     for (const [id, update] of Object.entries(this.usersPresence.remotePresences)) {
       this.initializeRemotePresence(id, update);
     }
@@ -149,11 +163,13 @@ class SharedbAceBinding {
    * Listens to the changes
    */
   listen = () => {
+    // TODO: Also update view on window resize
     this.session.on('change', this.onLocalChange);
+    this.session.on('changeScrollTop', this.onLocalChangeScrollTop);
     this.doc.on('op', this.onRemoteChange);
     this.doc.on('load', this.onRemoteReload);
 
-    this.usersPresence.on('receive', this.onRemotePresenceUpdate);
+    this.usersPresence.on('receive', this.onPresenceUpdate);
     this.session.selection.on('changeCursor', this.onLocalCursorChange);
     this.session.selection.on('changeSelection', this.onLocalSelectionChange);
   };
@@ -163,10 +179,11 @@ class SharedbAceBinding {
    */
   unlisten = () => {
     this.session.removeListener('change', this.onLocalChange);
+    this.session.off('changeScrollTop', this.onLocalChangeScrollTop);
     this.doc.off('op', this.onRemoteChange);
     this.doc.off('load', this.onRemoteReload);
 
-    this.usersPresence.off('receive', this.onRemotePresenceUpdate);
+    this.usersPresence.off('receive', this.onPresenceUpdate);
     this.session.selection.off('changeCursor', this.onLocalCursorChange);
     this.session.selection.off('changeSelection', this.onLocalSelectionChange);
   };
@@ -179,6 +196,7 @@ class SharedbAceBinding {
    * @throws {Error} throws error if delta is malformed
    */
   deltaTransform = (delta: Ace.Delta): sharedb.Op => {
+    // TODO: Use SubtypeOp to declare new operations
     const aceDoc = this.session.getDocument();
     const start = aceDoc.positionToIndex(delta.start);
     const end = aceDoc.positionToIndex(delta.end);
@@ -329,7 +347,7 @@ class SharedbAceBinding {
     }
   };
 
-  onRemotePresenceUpdate = (id: string, update: PresenceUpdate) => {
+  onPresenceUpdate = (id: string, update: PresenceUpdate) => {
     // TODO: logger and error handling
     // TODO: separate into multiple handlers
     if (update === null) {
@@ -342,77 +360,136 @@ class SharedbAceBinding {
         this.selectionManager.removeSelection(id);
         // eslint-disable-next-line no-empty
       } catch {}
-    } else {
-      if (update.cursorPos) {
-        try {
-          this.cursorManager.setCursor(id, update.cursorPos);
-        } catch {
-          this.cursorManager.addCursor(id, update.user.name, update.user.color, update.cursorPos);
-        }
-      }
 
-      if (update.ranges) {
-        const ranges = AceRangeUtil.fromJson(update.ranges);
-        try {
-          this.selectionManager.setSelection(id, ranges);
-        } catch {
-          this.selectionManager.addSelection(id, update.user.name, update.user.color, ranges);
-        }
+      try {
+        this.radarManager.removeView(id);
+        // eslint-disable-next-line no-empty
+      } catch {}
+
+      return;
+    }
+
+    if (update.cursorPos) {
+      try {
+        this.cursorManager.setCursor(id, update.cursorPos);
+      } catch {
+        this.cursorManager.addCursor(id, update.user.name, update.user.color, update.cursorPos);
+      }
+    }
+
+    if (update.selectionRange) {
+      const ranges = AceRangeUtil.fromJson(update.selectionRange);
+      try {
+        this.selectionManager.setSelection(id, ranges);
+      } catch {
+        this.selectionManager.addSelection(id, update.user.name, update.user.color, ranges);
+      }
+    }
+
+    if (update.radarViewRows) {
+      const intialRows = AceViewportUtil.indicesToRows(
+        this.editor,
+        update.radarViewRows.start,
+        update.radarViewRows.end
+      );
+      try {
+        this.radarManager.setViewRows(id, intialRows);
+      } catch {
+        this.radarManager.addView(
+          id,
+          update.user.name,
+          update.user.color,
+          intialRows,
+          update.radarCursorRow || 0
+        );
       }
     }
   };
 
+  onLocalChangeScrollTop = (scrollTop: number) => {
+    // TODO: logger and error handling
+    const viewportIndices = AceViewportUtil.getVisibleIndexRange(this.editor);
+    this.localPresence?.submit({
+      user: this.user,
+      radarViewRows: viewportIndices
+    });
+  };
+
   onLocalCursorChange = () => {
+    // TODO: logger and error handling
     const pos = this.session.selection.getCursor();
-    this.updateCursorPresence(pos);
+    this.localPresence?.submit({
+      user: this.user,
+      cursorPos: pos,
+      radarCursorRow: pos.row
+    });
   };
 
   onLocalSelectionChange = () => {
+    // TODO: logger and error handling
     const ranges = this.session.selection.getAllRanges();
-    this.updateSelectionPresence(AceRangeUtil.toJson(ranges));
+    this.localPresence?.submit({
+      user: this.user,
+      selectionRange: AceRangeUtil.toJson(ranges)
+    });
   };
 
-  initializePresence = () => {
+  initializeLocalPresence = () => {
     // TODO: logger and error handling
     this.localPresence = this.usersPresence.create();
     const cursorPos = this.session.selection.getCursor();
     const ranges = this.session.selection.getAllRanges();
+
+    const initialIndices = AceViewportUtil.getVisibleIndexRange(this.editor);
+
     this.localPresence.submit({
       user: this.user,
       cursorPos,
-      ranges
+      selectionRange: ranges,
+      radarViewRows: initialIndices,
+      radarCursorRow: cursorPos.row
     });
   };
 
-  initializeRemotePresence = (id: string, update: Required<PresenceUpdate>) => {
-    try {
-      this.cursorManager.setCursor(id, update.cursorPos);
-    } catch {
-      this.cursorManager.addCursor(id, update.user.name, update.user.color, update.cursorPos);
+  // TODO: Actually the same as onPresenceUpdate
+  initializeRemotePresence = (id: string, update: PresenceUpdate) => {
+    if (update.cursorPos) {
+      try {
+        this.cursorManager.setCursor(id, update.cursorPos);
+      } catch {
+        this.cursorManager.addCursor(id, update.user.name, update.user.color, update.cursorPos);
+      }
     }
 
-    const ranges = AceRangeUtil.fromJson(update.ranges);
-    try {
-      this.selectionManager.setSelection(id, ranges);
-    } catch {
-      this.selectionManager.addSelection(id, update.user.name, update.user.color, ranges);
+    if (update.selectionRange) {
+      const ranges = AceRangeUtil.fromJson(update.selectionRange);
+      try {
+        this.selectionManager.setSelection(id, ranges);
+      } catch {
+        this.selectionManager.addSelection(id, update.user.name, update.user.color, ranges);
+      }
     }
-  };
 
-  updateCursorPresence = (newCursorPos: Ace.Point) => {
-    // TODO: logger and error handling
-    this.localPresence?.submit({
-      user: this.user,
-      cursorPos: newCursorPos
-    });
-  };
+    if (update.radarViewRows) {
+      const rows = AceViewportUtil.indicesToRows(
+        this.editor,
+        update.radarViewRows.start,
+        update.radarViewRows.end
+      );
 
-  updateSelectionPresence = (newRanges: IRangeData[]) => {
-    // TODO: logger and error handling
-    this.localPresence?.submit({
-      user: this.user,
-      ranges: newRanges
-    });
+      try {
+        this.radarManager.setViewRows(id, rows);
+        this.radarManager.setCursorRow(id, update.radarCursorRow || 0);
+      } catch {
+        this.radarManager.addView(
+          id,
+          update.user.name,
+          update.user.color,
+          rows,
+          update.radarCursorRow || 0
+        );
+      }
+    }
   };
 
   destroyPresence = () => {

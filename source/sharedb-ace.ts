@@ -132,11 +132,12 @@ class SharedbAce extends EventEmitter {
     ace: IAceEditor,
     cursorManager: AceMultiCursorManager,
     selectionManager: AceMultiSelectionManager,
-    // TODO: Add this back in
-    // radarManager: AceRadarView,
+    radarManager: AceRadarView,
     path: string[],
     plugins: SharedbAcePlugin[]
   ) => {
+    // TODO: Make these managers optional
+
     const sharePath = path || [];
     const binding = new SharedbAceBinding({
       ace,
@@ -144,7 +145,7 @@ class SharedbAce extends EventEmitter {
       user: this.user,
       cursorManager,
       selectionManager,
-      // radarManager,
+      radarManager,
       usersPresence: this.usersPresence,
       path: sharePath,
       pluginWS: this.pluginWS,

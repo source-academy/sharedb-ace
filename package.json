@@ -11,9 +11,10 @@
   ],
   "license": "MIT",
   "scripts": {
-    "build": "yarn run build:yarn && yarn run build:dist",
+    "build": "yarn run build:yarn && yarn run build:dist && yarn run build:tsc",
     "build:yarn": "babel source --extensions .ts --out-dir distribution --presets=@babel/preset-env,@babel/preset-typescript",
     "build:dist": "cross-env NODE_OPTIONS=--openssl-legacy-provider webpack",
+    "build:tsc": "tsc",
     "test": "echo 'doing nothing'",
     "docs": "jsdoc source/*.js -d ./docs/"
   },
@@ -36,6 +37,7 @@
     "jsdom": "^16.3.0",
     "mocha": "^8.1.1",
     "react-ace": "^14.0.1",
+    "tsc": "^2.0.4",
     "typescript": "^5.7.3",
     "webpack": "^5.98.0",
     "webpack-cli": "^6.0.1"
