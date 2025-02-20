@@ -1,7 +1,7 @@
 var webpack = require('webpack');
 
 module.exports = {
-  entry: './source/sharedb-ace.js',
+  entry: './source/sharedb-ace.ts',
   output: {
     library: "sharedbAce",
     libraryTarget: "umd",
@@ -14,14 +14,17 @@ module.exports = {
       }
     })
   ],
+  resolve: {
+    extensions: ['.js', '.ts']
+  },
   module: {
     rules: [{
-      test: /\.js$/,
+      test: /\.ts$/,
       exclude: /node_modules/,
       use: {
         loader: 'babel-loader',
         options: {
-          presets: ['@babel/preset-env']
+          presets: ['@babel/preset-env', '@babel/preset-typescript']
         }
       }
     }]

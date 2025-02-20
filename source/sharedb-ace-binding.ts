@@ -5,17 +5,69 @@
  * @license MIT
  */
 
+import WebSocket from 'reconnecting-websocket';
 import Logdown from 'logdown';
+import sharedb from 'sharedb/lib/sharedb';
+import type {
+  AceMultiCursorManager,
+  AceMultiSelectionManager,
+  IRangeData
+} from '@convergencelabs/ace-collab-ext';
 import { AceRangeUtil } from '@convergencelabs/ace-collab-ext';
+import type { Ace, EditSession } from 'ace-builds';
+import type { IAceEditor } from 'react-ace/lib/types';
+import type { SharedbAcePlugin, SharedbAceUser } from './types';
 
-function traverse(object, path) {
+function traverse(object: any, path: string[]) {
   for (const key of path) {
     object = object[key];
   }
   return object;
 }
 
+interface SharedbAceBindingOptions {
+  ace: IAceEditor;
+  doc: sharedb.Doc;
+  user: SharedbAceUser;
+  cursorManager: AceMultiCursorManager;
+  selectionManager: AceMultiSelectionManager;
+  usersPresence: sharedb.Presence;
+  pluginWS?: WebSocket;
+  path: string[];
+  plugins?: SharedbAcePlugin[];
+  onError: (err: unknown) => unknown;
+}
+
+interface PresenceUpdate {
+  user: SharedbAceUser;
+  cursorPos?: Ace.Point;
+  ranges?: IRangeData[];
+}
+
 class SharedbAceBinding {
+  editor: IAceEditor;
+  session: EditSession;
+
+  user: SharedbAceUser;
+  doc: sharedb.Doc;
+
+  path: string[];
+
+  cursorManager: AceMultiCursorManager;
+  selectionManager: AceMultiSelectionManager;
+
+  usersPresence: sharedb.Presence;
+
+  logger: Logdown.Logger;
+
+  // When ops are applied to sharedb, ace emits edit events.
+  // This events need to be suppressed to prevent infinite looping
+  suppress = false;
+
+  localPresence?: sharedb.LocalPresence;
+
+  onError: (err: unknown) => unknown;
+
   /**
    * Constructs the binding object.
    *
@@ -52,48 +104,23 @@ class SharedbAceBinding {
    *   pluginWS: "http://localhost:3108/ws",
    * })
    */
-  constructor(options) {
+  constructor(options: SharedbAceBindingOptions) {
     this.editor = options.ace;
-    this.editor.id = `${options.id}-${options.path}`;
-    this.editor.$blockScrolling = Infinity;
     this.session = this.editor.getSession();
-    this.newline = this.session.getDocument().getNewLineCharacter();
     this.path = options.path;
     this.doc = options.doc;
     this.user = options.user;
     this.cursorManager = options.cursorManager;
     this.selectionManager = options.selectionManager;
     this.usersPresence = options.usersPresence;
-    this.pluginWS = options.pluginWS;
-    this.plugins = options.plugins || [];
     this.onError = options.onError;
-    this.logger = new Logdown('shareace');
+    this.logger = Logdown('shareace');
 
     // Initialize plugins
-    this.plugins.forEach((plugin) => {
-      plugin(this.pluginWS, this.editor);
-    });
-
-    // When ops are applied to sharedb, ace emits edit events.
-    // This events need to be suppressed to prevent infinite looping
-    this.suppress = false;
-
-    // Event Listeners
-    this.$onLocalChange = this.onLocalChange.bind(this);
-    this.$onRemoteChange = this.onRemoteChange.bind(this);
-
-    this.$onRemotePresenceUpdate = this.onRemotePresenceUpdate.bind(this);
-    this.$onLocalCursorChange = this.onLocalCursorChange.bind(this);
-    this.$onLocalSelectionChange = this.onLocalSelectionChange.bind(this);
-
-    this.$initializePresence = this.initializePresence.bind(this);
-    this.$initializeRemotePresence = this.initializeRemotePresence.bind(this);
-
-    this.$updateCursorPresence = this.updateCursorPresence.bind(this);
-    this.$updateSelectionPresence = this.updateSelectionPresence.bind(this);
-    this.$destroyPresence = this.destroyPresence.bind(this);
-
-    this.$onRemoteReload = this.onRemoteReload.bind(this);
+    if (options.pluginWS && options.plugins) {
+      const { pluginWS } = options;
+      options.plugins.forEach((plugin) => plugin(pluginWS, this.editor));
+    }
 
     // Set value of ace document to ShareDB document value
     this.setInitialValue();
@@ -105,44 +132,44 @@ class SharedbAceBinding {
   /**
    * Sets the ace document value to the ShareDB document value
    */
-  setInitialValue() {
+  setInitialValue = () => {
     this.suppress = true;
     this.session.setValue(traverse(this.doc.data, this.path));
     this.suppress = false;
 
     this.cursorManager.removeAll();
     this.selectionManager.removeAll();
-    this.$initializePresence();
+    this.initializePresence();
     for (const [id, update] of Object.entries(this.usersPresence.remotePresences)) {
       this.initializeRemotePresence(id, update);
     }
-  }
+  };
 
   /**
    * Listens to the changes
    */
-  listen() {
-    this.session.on('change', this.$onLocalChange);
-    this.doc.on('op', this.$onRemoteChange);
-    this.doc.on('load', this.$onRemoteReload);
+  listen = () => {
+    this.session.on('change', this.onLocalChange);
+    this.doc.on('op', this.onRemoteChange);
+    this.doc.on('load', this.onRemoteReload);
 
-    this.usersPresence.on('receive', this.$onRemotePresenceUpdate);
-    this.session.selection.on('changeCursor', this.$onLocalCursorChange);
-    this.session.selection.on('changeSelection', this.$onLocalSelectionChange);
-  }
+    this.usersPresence.on('receive', this.onRemotePresenceUpdate);
+    this.session.selection.on('changeCursor', this.onLocalCursorChange);
+    this.session.selection.on('changeSelection', this.onLocalSelectionChange);
+  };
 
   /**
    * Stop listening to changes
    */
-  unlisten() {
-    this.session.removeListener('change', this.$onLocalChange);
-    this.doc.off('op', this.$onRemoteChange);
-    this.doc.off('load', this.$onRemoteReload);
+  unlisten = () => {
+    this.session.removeListener('change', this.onLocalChange);
+    this.doc.off('op', this.onRemoteChange);
+    this.doc.off('load', this.onRemoteReload);
 
-    this.usersPresence.off('receive', this.$onRemotePresenceUpdate);
-    this.session.selection.off('changeCursor', this.$onLocalCursorChange);
-    this.session.selection.off('changeSelection', this.$onLocalSelectionChange);
-  }
+    this.usersPresence.off('receive', this.onRemotePresenceUpdate);
+    this.session.selection.off('changeCursor', this.onLocalCursorChange);
+    this.session.selection.off('changeSelection', this.onLocalSelectionChange);
+  };
 
   /**
    * Delta (Ace Editor) -> Op (ShareDB)
@@ -151,27 +178,29 @@ class SharedbAceBinding {
    * @returns {Object}  op - op compliant with ShareDB
    * @throws {Error} throws error if delta is malformed
    */
-  deltaTransform(delta) {
+  deltaTransform = (delta: Ace.Delta): sharedb.Op => {
     const aceDoc = this.session.getDocument();
-    const op = {};
     const start = aceDoc.positionToIndex(delta.start);
     const end = aceDoc.positionToIndex(delta.end);
-    op.p = this.path.concat(start);
+    let op: sharedb.Op;
     this.logger.log(`start: ${start} end: ${end}`);
-    let action;
+    const str = delta.lines.join('\n');
     if (delta.action === 'insert') {
-      action = 'si';
+      op = {
+        p: [...this.path, start],
+        si: str
+      };
     } else if (delta.action === 'remove') {
-      action = 'sd';
+      op = {
+        p: [...this.path, start],
+        sd: str
+      };
     } else {
-      throw new Error(`action ${action} not supported`);
+      throw new Error(`action ${delta.action} not supported`);
     }
 
-    const str = delta.lines.join('\n');
-
-    op[action] = str;
     return op;
-  }
+  };
 
   /**
    *
@@ -179,15 +208,15 @@ class SharedbAceBinding {
    * @returns {Object[]} deltas - array of Ace Editor compliant deltas
    * @throws {Error} throws error on malformed op
    */
-  opTransform(ops) {
+  opTransform = (ops: sharedb.Op[]): Ace.Delta[] => {
     const self = this;
-    function opToDelta(op) {
-      const index = op.p[op.p.length - 1];
+    const opToDelta = (op: sharedb.Op): Ace.Delta => {
+      const index = op.p.at(-1) as number;
       const pos = self.session.doc.indexToPosition(index, 0);
       const start = pos;
-      let action;
-      let lines;
-      let end;
+      let action: 'remove' | 'insert';
+      let lines: string[];
+      let end: Ace.Point;
 
       if ('sd' in op) {
         action = 'remove';
@@ -212,18 +241,15 @@ class SharedbAceBinding {
         throw new Error(`Invalid Operation: ${JSON.stringify(op)}`);
       }
 
-      const delta = {
+      return {
         start,
         end,
         action,
         lines
       };
-
-      return delta;
-    }
-    const deltas = ops.map(opToDelta);
-    return deltas;
-  }
+    };
+    return ops.map(opToDelta);
+  };
 
   /**
    * Event listener for local changes (ace editor)
@@ -233,7 +259,7 @@ class SharedbAceBinding {
    * @param {} delta - ace editor op (compliant with
    * ace editor event listener spec)
    */
-  onLocalChange(delta) {
+  onLocalChange = (delta: Ace.Delta) => {
     try {
       this.logger.log(`*local*: fired ${Date.now()}`);
       this.logger.log(`*local*: delta received: ${JSON.stringify(delta)}`);
@@ -245,7 +271,7 @@ class SharedbAceBinding {
       const op = this.deltaTransform(delta);
       this.logger.log(`*local*: transformed op: ${JSON.stringify(op)}`);
 
-      const docSubmitted = (err) => {
+      const docSubmitted: sharedb.Callback = (err) => {
         if (err) {
           this.onError && this.onError(err);
           this.logger.log(`*local*: op error: ${err}`);
@@ -264,7 +290,7 @@ class SharedbAceBinding {
     } catch (err) {
       this.onError && this.onError(err);
     }
-  }
+  };
 
   /**
    * Event Listener for remote events (ShareDB)
@@ -273,14 +299,13 @@ class SharedbAceBinding {
    * @param {Object} source - which sharedb-ace-binding instance
    * created the op. If self, don't apply the op.
    */
-  onRemoteChange(ops, source) {
+  onRemoteChange = (ops: sharedb.Op[], source: this | false, clientId?: string) => {
     try {
       this.logger.log(`*remote*: fired ${Date.now()}`);
-      const self = this;
 
       const opsPath = ops[0].p.slice(0, ops[0].p.length - 1).toString();
       this.logger.log(opsPath);
-      if (source === self) {
+      if (source === this) {
         this.logger.log('*remote*: op origin is self; _skipping_');
         return;
       } else if (opsPath !== this.path.toString()) {
@@ -292,9 +317,9 @@ class SharedbAceBinding {
       this.logger.log(`*remote*: op received: ${JSON.stringify(ops)}`);
       this.logger.log(`*remote*: transformed delta: ${JSON.stringify(deltas)}`);
 
-      self.suppress = true;
-      self.session.getDocument().applyDeltas(deltas);
-      self.suppress = false;
+      this.suppress = true;
+      this.session.getDocument().applyDeltas(deltas);
+      this.suppress = false;
 
       this.logger.log('*remote*: session value');
       this.logger.log(JSON.stringify(this.session.getValue()));
@@ -302,9 +327,9 @@ class SharedbAceBinding {
     } catch (err) {
       this.onError && this.onError(err);
     }
-  }
+  };
 
-  onRemotePresenceUpdate(id, update) {
+  onRemotePresenceUpdate = (id: string, update: PresenceUpdate) => {
     // TODO: logger and error handling
     // TODO: separate into multiple handlers
     if (update === null) {
@@ -335,19 +360,19 @@ class SharedbAceBinding {
         }
       }
     }
-  }
+  };
 
-  onLocalCursorChange() {
+  onLocalCursorChange = () => {
     const pos = this.session.selection.getCursor();
     this.updateCursorPresence(pos);
-  }
+  };
 
-  onLocalSelectionChange() {
+  onLocalSelectionChange = () => {
     const ranges = this.session.selection.getAllRanges();
     this.updateSelectionPresence(AceRangeUtil.toJson(ranges));
-  }
+  };
 
-  initializePresence() {
+  initializePresence = () => {
     // TODO: logger and error handling
     this.localPresence = this.usersPresence.create();
     const cursorPos = this.session.selection.getCursor();
@@ -357,52 +382,53 @@ class SharedbAceBinding {
       cursorPos,
       ranges
     });
-  }
+  };
 
-  initializeRemotePresence(id, update) {
+  initializeRemotePresence = (id: string, update: Required<PresenceUpdate>) => {
     try {
       this.cursorManager.setCursor(id, update.cursorPos);
     } catch {
       this.cursorManager.addCursor(id, update.user.name, update.user.color, update.cursorPos);
     }
 
+    const ranges = AceRangeUtil.fromJson(update.ranges);
     try {
-      this.selectionManager.setSelection(id, update.ranges);
+      this.selectionManager.setSelection(id, ranges);
     } catch {
-      this.selectionManager.addSelection(id, update.user.name, update.user.color, update.ranges);
+      this.selectionManager.addSelection(id, update.user.name, update.user.color, ranges);
     }
-  }
+  };
 
-  updateCursorPresence(newCursorPos) {
+  updateCursorPresence = (newCursorPos: Ace.Point) => {
     // TODO: logger and error handling
-    this.localPresence.submit({
+    this.localPresence?.submit({
       user: this.user,
       cursorPos: newCursorPos
     });
-  }
+  };
 
-  updateSelectionPresence(newRanges) {
+  updateSelectionPresence = (newRanges: IRangeData[]) => {
     // TODO: logger and error handling
-    this.localPresence.submit({
+    this.localPresence?.submit({
       user: this.user,
       ranges: newRanges
     });
-  }
+  };
 
-  destroyPresence() {
+  destroyPresence = () => {
     // TODO: logger and error handling
-    this.localPresence.destroy();
+    this.localPresence?.destroy();
     this.localPresence = undefined;
-  }
+  };
 
   /**
    * Handles document load event. Called when there is a transform error and
    * ShareDB reloads the document, or when websocket has to reconnect.
    */
-  onRemoteReload() {
+  onRemoteReload = () => {
     this.logger.log('*remote*: reloading document');
     this.setInitialValue();
-  }
+  };
 }
 
 export default SharedbAceBinding;

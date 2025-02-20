@@ -7,15 +7,44 @@
 
 import WebSocket from 'reconnecting-websocket';
 import EventEmitter from 'event-emitter-es6';
-import sharedb from 'sharedb/lib/client';
+import type sharedb from 'sharedb/lib/sharedb';
+import { Connection as sharedbConnection } from 'sharedb/lib/client';
 import SharedbAceBinding from './sharedb-ace-binding';
+import type { SharedbAcePlugin, SharedbAceUser } from './types';
+import type {
+  AceMultiCursorManager,
+  AceMultiSelectionManager,
+  AceRadarView
+} from '@convergencelabs/ace-collab-ext';
+import type { IAceEditor } from 'react-ace/lib/types';
 
-function IllegalArgumentException(message) {
-  this.message = message;
-  this.name = 'IllegalArgumentException';
+interface IllegalArgumentException {
+  name: 'IllegalArgumentException';
+}
+
+function IllegalArgumentException(message: string) {
+  const error = new Error(message) as IllegalArgumentException;
+  return error;
+}
+
+interface SharedbAceOptions {
+  user: SharedbAceUser;
+  namespace: string;
+  WsUrl: string;
+  pluginWsUrl: string | null;
 }
 
 class SharedbAce extends EventEmitter {
+  user: SharedbAceUser;
+
+  WS: WebSocket;
+  pluginWS: WebSocket | undefined;
+
+  doc: sharedb.Doc;
+  usersPresence: sharedb.Presence;
+
+  connections: Record<string, SharedbAceBinding>;
+
   /**
    * creating an instance connects to sharedb via websockets
    * and initializes the document with no connections
@@ -36,30 +65,29 @@ class SharedbAce extends EventEmitter {
    * @param {string} options.pluginWsUrl - Websocket URL for extra plugins
    * (different port from options.WsUrl)
    */
-  constructor(id, options) {
+  constructor(id: string, options: SharedbAceOptions) {
     super();
-    this.id = id;
     this.user = options.user;
     if (options.pluginWsUrl !== null) {
       this.pluginWS = new WebSocket(options.pluginWsUrl);
     }
 
     if (options.WsUrl === null) {
-      throw new IllegalArgumentException('wsUrl not provided.');
+      throw IllegalArgumentException('wsUrl not provided.');
     }
 
     this.WS = new WebSocket(options.WsUrl);
 
-    const connection = new sharedb.Connection(this.WS);
+    const connection = new sharedbConnection(this.WS as sharedb.Socket);
     if (options.namespace === null) {
-      throw new IllegalArgumentException('namespace not provided.');
+      throw IllegalArgumentException('namespace not provided.');
     }
     const namespace = options.namespace;
     const doc = connection.get(namespace, id);
 
     // Fetches once from the server, and fires events
     // on subsequent document changes
-    const docSubscribed = (err) => {
+    const docSubscribed: sharedb.Callback = (err) => {
       if (err) throw err;
 
       if (!doc.type) {
@@ -83,11 +111,7 @@ class SharedbAce extends EventEmitter {
     this.usersPresence = usersPresence;
     this.connections = {};
 
-    this.WS.onopen(() => {
-      for (const conn of this.connections) {
-        conn.onRemoteReload();
-      }
-    })
+    this.WS.onopen = () => Object.values(this.connections).forEach((conn) => conn.onRemoteReload());
   }
 
   /**
@@ -98,12 +122,21 @@ class SharedbAce extends EventEmitter {
    * @param {Object} ace - ace editor instance
    * @param {Object} cursorManager - cursor manager for the editor
    * @param {Object} selectionManager - selection manager for the editor
+   * @param {Object} radarManager - radar manager for the editor
    * @param {string[]} path - A lens, describing the nesting to the JSON document.
    * It should point to a string.
    * @param {Object[]} plugins - list of plugins to add to this particular
    * ace instance
    */
-  add(ace, cursorManager, selectionManager, path, plugins) {
+  add = (
+    ace: IAceEditor,
+    cursorManager: AceMultiCursorManager,
+    selectionManager: AceMultiSelectionManager,
+    // TODO: Add this back in
+    // radarManager: AceRadarView,
+    path: string[],
+    plugins: SharedbAcePlugin[]
+  ) => {
     const sharePath = path || [];
     const binding = new SharedbAceBinding({
       ace,
@@ -111,15 +144,15 @@ class SharedbAce extends EventEmitter {
       user: this.user,
       cursorManager,
       selectionManager,
+      // radarManager,
       usersPresence: this.usersPresence,
       path: sharePath,
       pluginWS: this.pluginWS,
-      id: this.id,
       plugins,
       onError: (error) => this.emit('error', path, error)
     });
     this.connections[path.join('-')] = binding;
-  }
+  };
 }
 
 export default SharedbAce;

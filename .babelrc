@@ -6,6 +6,7 @@
         "targets": ["Firefox ESR", "last 2 chrome versions", "last 2 safari versions"],
         "loose": false
       }
-    ]
+    ],
+    ["@babel/preset-typescript", { "rewriteImportExtensions": true }]
   ]
 }
