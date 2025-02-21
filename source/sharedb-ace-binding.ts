@@ -5,22 +5,17 @@
  * @license MIT
  */
 
-// TODO: support reconnects with same id
-
-import { WebSocket } from 'partysocket';
 import Logdown from 'logdown';
-import sharedb from 'sharedb/lib/sharedb';
 import type {
   AceMultiCursorManager,
   AceMultiSelectionManager,
-  AceRadarView,
-  IRangeData
+  AceRadarView
 } from '@convergencelabs/ace-collab-ext';
-import { IIndexRange } from '@convergencelabs/ace-collab-ext/dist/types/IndexRange';
 import { AceViewportUtil, AceRangeUtil } from '@convergencelabs/ace-collab-ext';
 import type { Ace, EditSession } from 'ace-builds';
 import type { IAceEditor } from 'react-ace/lib/types';
-import type { SharedbAcePlugin, SharedbAceUser } from './types';
+import sharedb from 'sharedb/lib/sharedb';
+import type { PresenceUpdate, SharedbAceUser } from './types';
 
 function traverse(object: any, path: string[]) {
   for (const key of path) {
@@ -33,22 +28,12 @@ interface SharedbAceBindingOptions {
   ace: IAceEditor;
   doc: sharedb.Doc;
   user: SharedbAceUser;
-  cursorManager: AceMultiCursorManager;
-  selectionManager: AceMultiSelectionManager;
-  radarManager: AceRadarView;
-  usersPresence: sharedb.Presence;
-  pluginWS?: WebSocket;
+  cursorManager?: AceMultiCursorManager;
+  selectionManager?: AceMultiSelectionManager;
+  radarManager?: AceRadarView;
+  usersPresence: sharedb.Presence<PresenceUpdate>;
   path: string[];
-  plugins?: SharedbAcePlugin[];
-  onError: (err: unknown) => unknown;
-}
-
-interface PresenceUpdate {
-  user: SharedbAceUser;
-  cursorPos?: Ace.Point;
-  selectionRange?: IRangeData[];
-  radarViewRows?: IIndexRange;
-  radarCursorRow?: number;
+  onError?: (err: unknown) => unknown;
 }
 
 class SharedbAceBinding {
@@ -60,11 +45,11 @@ class SharedbAceBinding {
 
   path: string[];
 
-  cursorManager: AceMultiCursorManager;
-  selectionManager: AceMultiSelectionManager;
-  radarManager: AceRadarView;
+  cursorManager?: AceMultiCursorManager;
+  selectionManager?: AceMultiSelectionManager;
+  radarManager?: AceRadarView;
 
-  usersPresence: sharedb.Presence;
+  usersPresence: sharedb.Presence<PresenceUpdate>;
 
   logger: Logdown.Logger;
 
@@ -74,7 +59,18 @@ class SharedbAceBinding {
 
   localPresence?: sharedb.LocalPresence<PresenceUpdate>;
 
-  onError: (err: unknown) => unknown;
+  connectedUsers: Record<string, SharedbAceUser> = {};
+
+  docSubmitted: sharedb.Callback = (err) => {
+    if (err) {
+      this.onError?.(err);
+      this.logger.log(`*local*: op error: ${err}`);
+    } else {
+      this.logger.log('*local*: op submitted');
+    }
+  };
+
+  onError?: (err: unknown) => unknown;
 
   /**
    * Constructs the binding object.
@@ -93,11 +89,8 @@ class SharedbAceBinding {
    * the selections in the editor
    * @param {Object} options.usersPresence - ShareDB presence channel
    * containing information of the users, including cursor positions
-   * @param {Object} options.pluginWS - WebSocket connection for
-   * sharedb-ace plugins
    * @param {string[]} options.path - A lens, describing the nesting
    * to the JSON document. It should point to a string.
-   * @param {Object[]} options.plugins - array of sharedb-ace plugins
    * @param {?function} options.onError - a callback on error
    * @example
    * const binding = new SharedbAceBinding({
@@ -108,8 +101,6 @@ class SharedbAceBinding {
    *   selectionManager: selectionManager,
    *   usersPresence: usersPresence,
    *   path: ["path"],
-   *   plugins: [ SharedbAceMultipleCursors ],
-   *   pluginWS: "http://localhost:3108/ws",
    * })
    */
   constructor(options: SharedbAceBindingOptions) {
@@ -124,12 +115,6 @@ class SharedbAceBinding {
     this.usersPresence = options.usersPresence;
     this.onError = options.onError;
     this.logger = Logdown('shareace');
-
-    // Initialize plugins
-    if (options.pluginWS && options.plugins) {
-      const { pluginWS } = options;
-      options.plugins.forEach((plugin) => plugin(pluginWS, this.editor));
-    }
 
     // Set value of ace document to ShareDB document value
     this.setInitialValue();
@@ -146,10 +131,12 @@ class SharedbAceBinding {
     this.session.setValue(traverse(this.doc.data, this.path));
     this.suppress = false;
 
-    this.cursorManager.removeAll();
-    this.selectionManager.removeAll();
-    // TODO: Remove all views for radarManager
-    // this.radarManager.removeView();
+    this.cursorManager?.removeAll();
+    this.selectionManager?.removeAll();
+
+    // @ts-expect-error hotfix to remove all views in radarManager
+    this.radarManager?.removeAllViews();
+
     this.initializeLocalPresence();
     for (const [id, update] of Object.entries(this.usersPresence.remotePresences)) {
       this.updatePresence(id, update);
@@ -160,30 +147,35 @@ class SharedbAceBinding {
    * Listens to the changes
    */
   listen = () => {
-    // TODO: Also update view on window resize
-    // TODO: Clicking on radar indicator is not exactly accurate
-    this.session.on('change', this.onLocalChange);
-    this.session.on('changeScrollTop', this.onLocalChangeScrollTop);
     this.doc.on('op', this.onRemoteChange);
     this.doc.on('load', this.onRemoteReload);
 
+    this.session.on('change', this.onLocalChange);
     this.usersPresence.on('receive', this.updatePresence);
     this.session.selection.on('changeCursor', this.onLocalCursorChange);
     this.session.selection.on('changeSelection', this.onLocalSelectionChange);
+
+    // Hotfix for clicking on radar indicator to update local presence
+    // because editor.scrollToLine does not trigger changeScrollTop
+    // Generates a decent amount of traffic but it's ok for now
+    this.editor.renderer.on('afterRender', this.onLocalViewChange);
+
+    this.session.on('changeMode', this.onLocalModeChange);
   };
 
   /**
    * Stop listening to changes
    */
   unlisten = () => {
-    this.session.removeListener('change', this.onLocalChange);
-    this.session.off('changeScrollTop', this.onLocalChangeScrollTop);
     this.doc.off('op', this.onRemoteChange);
     this.doc.off('load', this.onRemoteReload);
 
+    this.session.removeListener('change', this.onLocalChange);
     this.usersPresence.off('receive', this.updatePresence);
     this.session.selection.off('changeCursor', this.onLocalCursorChange);
     this.session.selection.off('changeSelection', this.onLocalSelectionChange);
+    this.editor.renderer.off('afterRender', this.onLocalViewChange);
+    this.session.off('changeMode', this.onLocalModeChange);
   };
 
   /**
@@ -194,7 +186,6 @@ class SharedbAceBinding {
    * @throws {Error} throws error if delta is malformed
    */
   deltaTransform = (delta: Ace.Delta): sharedb.Op => {
-    // TODO: Use SubtypeOp to declare new operations
     const aceDoc = this.session.getDocument();
     const start = aceDoc.positionToIndex(delta.start);
     const end = aceDoc.positionToIndex(delta.end);
@@ -225,10 +216,9 @@ class SharedbAceBinding {
    * @throws {Error} throws error on malformed op
    */
   opTransform = (ops: sharedb.Op[]): Ace.Delta[] => {
-    const self = this;
     const opToDelta = (op: sharedb.Op): Ace.Delta => {
       const index = op.p.at(-1) as number;
-      const pos = self.session.doc.indexToPosition(index, 0);
+      const pos = this.session.doc.indexToPosition(index, 0);
       const start = pos;
       let action: 'remove' | 'insert';
       let lines: string[];
@@ -238,7 +228,7 @@ class SharedbAceBinding {
         action = 'remove';
         lines = op.sd.split('\n');
         const count = lines.reduce((total, line) => total + line.length, lines.length - 1);
-        end = self.session.doc.indexToPosition(index + count, 0);
+        end = this.session.doc.indexToPosition(index + count, 0);
       } else if ('si' in op) {
         action = 'insert';
         lines = op.si.split('\n');
@@ -287,25 +277,28 @@ class SharedbAceBinding {
       const op = this.deltaTransform(delta);
       this.logger.log(`*local*: transformed op: ${JSON.stringify(op)}`);
 
-      const docSubmitted: sharedb.Callback = (err) => {
-        if (err) {
-          this.onError && this.onError(err);
-          this.logger.log(`*local*: op error: ${err}`);
-        } else {
-          this.logger.log('*local*: op submitted');
-        }
-      };
-
       if (!this.doc.type) {
         // likely previous operation failed, we're out of sync
         // don't submitOp now
         return;
       }
 
-      this.doc.submitOp(op, { source: this }, docSubmitted);
+      this.doc.submitOp(op, { source: this }, this.docSubmitted);
     } catch (err) {
-      this.onError && this.onError(err);
+      this.onError?.(err);
     }
+  };
+
+  onLocalModeChange = () => {
+    // TODO: This is wrong
+    // @ts-ignore
+    const modeString: string = this.session.getMode().$id;
+    const mode = modeString.substring(modeString.lastIndexOf('/') + 1);
+
+    this.localPresence?.submit({
+      user: this.user,
+      newMode: mode
+    });
   };
 
   /**
@@ -315,7 +308,7 @@ class SharedbAceBinding {
    * @param {Object} source - which sharedb-ace-binding instance
    * created the op. If self, don't apply the op.
    */
-  onRemoteChange = (ops: sharedb.Op[], source: this | false, clientId?: string) => {
+  onRemoteChange = (ops: sharedb.Op[], source: this | false) => {
     try {
       this.logger.log(`*remote*: fired ${Date.now()}`);
 
@@ -341,33 +334,38 @@ class SharedbAceBinding {
       this.logger.log(JSON.stringify(this.session.getValue()));
       this.logger.log('*remote*: delta applied');
     } catch (err) {
-      this.onError && this.onError(err);
+      this.onError?.(err);
     }
   };
 
   updatePresence = (id: string, update: PresenceUpdate) => {
     // TODO: logger and error handling
-    // TODO: separate into multiple handlers
     if (update === null) {
       try {
-        this.cursorManager.removeCursor(id);
+        this.cursorManager?.removeCursor(id);
         // eslint-disable-next-line no-empty
       } catch {}
 
       try {
-        this.selectionManager.removeSelection(id);
+        this.selectionManager?.removeSelection(id);
         // eslint-disable-next-line no-empty
       } catch {}
 
       try {
-        this.radarManager.removeView(id);
+        this.radarManager?.removeView(id);
         // eslint-disable-next-line no-empty
       } catch {}
+
+      if (id in this.connectedUsers) {
+        delete this.connectedUsers[id];
+      }
 
       return;
     }
 
-    if (update.cursorPos) {
+    this.connectedUsers[id] = update.user;
+
+    if (this.cursorManager && update.cursorPos) {
       try {
         this.cursorManager.setCursor(id, update.cursorPos);
       } catch {
@@ -375,7 +373,7 @@ class SharedbAceBinding {
       }
     }
 
-    if (update.selectionRange) {
+    if (this.selectionManager && update.selectionRange) {
       const ranges = AceRangeUtil.fromJson(update.selectionRange);
       try {
         this.selectionManager.setSelection(id, ranges);
@@ -384,7 +382,7 @@ class SharedbAceBinding {
       }
     }
 
-    if (update.radarViewRows) {
+    if (this.radarManager && update.radarViewRows) {
       const rows = AceViewportUtil.indicesToRows(
         this.editor,
         update.radarViewRows.start,
@@ -402,9 +400,14 @@ class SharedbAceBinding {
         );
       }
     }
+
+    // TODO: This is not the right way
+    if (update.newMode) {
+      this.session.setMode(update.newMode);
+    }
   };
 
-  onLocalChangeScrollTop = (scrollTop: number) => {
+  onLocalViewChange = () => {
     // TODO: logger and error handling
     const viewportIndices = AceViewportUtil.getVisibleIndexRange(this.editor);
     this.localPresence?.submit({

@@ -7,41 +7,39 @@
 
 import { WebSocket } from 'partysocket';
 import EventEmitter from 'event-emitter-es6';
-import type sharedb from 'sharedb/lib/sharedb';
-import { Connection as sharedbConnection } from 'sharedb/lib/client';
-import SharedbAceBinding from './sharedb-ace-binding';
-import type { SharedbAcePlugin, SharedbAceUser } from './types';
+import ShareDB from 'sharedb';
+import type { Callback, Socket } from 'sharedb/lib/sharedb';
+import { type Presence, Connection as sharedbConnection } from 'sharedb/lib/client';
 import type {
   AceMultiCursorManager,
   AceMultiSelectionManager,
   AceRadarView
 } from '@convergencelabs/ace-collab-ext';
 import type { IAceEditor } from 'react-ace/lib/types';
+import SharedbAceBinding from './sharedb-ace-binding';
+import type { PresenceUpdate, SharedbAceUser } from './types';
 
 interface IllegalArgumentException {
   name: 'IllegalArgumentException';
 }
 
 function IllegalArgumentException(message: string) {
-  const error = new Error(message) as IllegalArgumentException;
-  return error;
+  return new Error(message) as IllegalArgumentException;
 }
 
 interface SharedbAceOptions {
   user: SharedbAceUser;
   namespace: string;
   WsUrl: string;
-  pluginWsUrl: string | null;
 }
 
 class SharedbAce extends EventEmitter {
   user: SharedbAceUser;
 
   WS: WebSocket;
-  pluginWS: WebSocket | undefined;
 
-  doc: sharedb.Doc;
-  usersPresence: sharedb.Presence;
+  doc: ShareDB.Doc;
+  usersPresence: Presence<PresenceUpdate>;
 
   connections: Record<string, SharedbAceBinding>;
 
@@ -68,9 +66,6 @@ class SharedbAce extends EventEmitter {
   constructor(id: string, options: SharedbAceOptions) {
     super();
     this.user = options.user;
-    if (options.pluginWsUrl !== null) {
-      this.pluginWS = new WebSocket(options.pluginWsUrl);
-    }
 
     if (options.WsUrl === null) {
       throw IllegalArgumentException('wsUrl not provided.');
@@ -78,7 +73,7 @@ class SharedbAce extends EventEmitter {
 
     this.WS = new WebSocket(options.WsUrl);
 
-    const connection = new sharedbConnection(this.WS as sharedb.Socket);
+    const connection = new sharedbConnection(this.WS as Socket);
     if (options.namespace === null) {
       throw IllegalArgumentException('namespace not provided.');
     }
@@ -87,7 +82,7 @@ class SharedbAce extends EventEmitter {
 
     // Fetches once from the server, and fires events
     // on subsequent document changes
-    const docSubscribed: sharedb.Callback = (err) => {
+    const docSubscribed: Callback = (err) => {
       if (err) throw err;
 
       if (!doc.type) {
@@ -111,7 +106,9 @@ class SharedbAce extends EventEmitter {
     this.usersPresence = usersPresence;
     this.connections = {};
 
-    this.WS.onopen = () => Object.values(this.connections).forEach((conn) => conn.onRemoteReload());
+    this.WS.addEventListener('open', () => {
+      Object.values(this.connections).forEach((conn) => conn.onRemoteReload());
+    });
   }
 
   /**
@@ -125,34 +122,30 @@ class SharedbAce extends EventEmitter {
    * @param {Object} radarManager - radar manager for the editor
    * @param {string[]} path - A lens, describing the nesting to the JSON document.
    * It should point to a string.
-   * @param {Object[]} plugins - list of plugins to add to this particular
-   * ace instance
    */
   add = (
     ace: IAceEditor,
-    cursorManager: AceMultiCursorManager,
-    selectionManager: AceMultiSelectionManager,
-    radarManager: AceRadarView,
     path: string[],
-    plugins: SharedbAcePlugin[]
-  ) => {
-    // TODO: Make these managers optional
-
+    managers: {
+      cursorManager?: AceMultiCursorManager;
+      selectionManager?: AceMultiSelectionManager;
+      radarManager?: AceRadarView;
+    }
+  ): SharedbAceBinding => {
     const sharePath = path || [];
     const binding = new SharedbAceBinding({
       ace,
       doc: this.doc,
       user: this.user,
-      cursorManager,
-      selectionManager,
-      radarManager,
-      usersPresence: this.usersPresence,
       path: sharePath,
-      pluginWS: this.pluginWS,
-      plugins,
+      cursorManager: managers.cursorManager,
+      selectionManager: managers.selectionManager,
+      radarManager: managers.radarManager,
+      usersPresence: this.usersPresence,
       onError: (error) => this.emit('error', path, error)
     });
     this.connections[path.join('-')] = binding;
+    return binding;
   };
 }
 

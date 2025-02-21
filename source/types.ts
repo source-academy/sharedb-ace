@@ -1,9 +1,17 @@
-import type { WebSocket } from 'partysocket';
+import type { IRangeData } from '@convergencelabs/ace-collab-ext';
+import type { IIndexRange } from '@convergencelabs/ace-collab-ext/dist/types/IndexRange';
+import type { Ace } from 'ace-builds';
 
 export interface SharedbAceUser {
-  id: string;
   name: string;
   color: string;
 }
 
-export type SharedbAcePlugin = (pluginWS: WebSocket, editor: any) => any;
+export interface PresenceUpdate {
+  user: SharedbAceUser;
+  cursorPos?: Ace.Point;
+  selectionRange?: IRangeData[];
+  radarViewRows?: IIndexRange;
+  radarCursorRow?: number;
+  newMode?: string;
+}
