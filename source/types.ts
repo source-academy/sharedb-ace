@@ -5,6 +5,7 @@ import type { Ace } from 'ace-builds';
 export interface SharedbAceUser {
   name: string;
   color: string;
+  role: 'owner' | 'editor' | 'viewer';
 }
 
 export interface PresenceUpdate {
