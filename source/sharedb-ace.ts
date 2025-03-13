@@ -130,6 +130,9 @@ class SharedbAce extends EventEmitter {
       cursorManager?: AceMultiCursorManager;
       selectionManager?: AceMultiSelectionManager;
       radarManager?: AceRadarView;
+    },
+    extra?: {
+      languageSelectHandler?: (language: string) => void;
     }
   ): SharedbAceBinding => {
     const sharePath = path || [];
@@ -142,6 +145,7 @@ class SharedbAce extends EventEmitter {
       selectionManager: managers.selectionManager,
       radarManager: managers.radarManager,
       usersPresence: this.usersPresence,
+      languageSelectHandler: extra?.languageSelectHandler,
       onError: (error) => this.emit('error', path, error)
     });
     this.connections[path.join('-')] = binding;

@@ -33,6 +33,7 @@ interface SharedbAceBindingOptions {
   radarManager?: AceRadarView;
   usersPresence: sharedb.Presence<PresenceUpdate>;
   path: string[];
+  languageSelectHandler?: (language: string) => void;
   onError?: (err: unknown) => unknown;
 }
 
@@ -48,6 +49,8 @@ class SharedbAceBinding {
   cursorManager?: AceMultiCursorManager;
   selectionManager?: AceMultiSelectionManager;
   radarManager?: AceRadarView;
+
+  languageSelectHandler?: (language: string) => void;
 
   usersPresence: sharedb.Presence<PresenceUpdate>;
 
@@ -113,6 +116,7 @@ class SharedbAceBinding {
     this.selectionManager = options.selectionManager;
     this.radarManager = options.radarManager;
     this.usersPresence = options.usersPresence;
+    this.languageSelectHandler = options.languageSelectHandler;
     this.onError = options.onError;
     this.logger = Logdown('shareace');
 
@@ -290,7 +294,6 @@ class SharedbAceBinding {
   };
 
   onLocalModeChange = () => {
-    // TODO: This is wrong
     // @ts-ignore
     const modeString: string = this.session.getMode().$id;
     const mode = modeString.substring(modeString.lastIndexOf('/') + 1);
@@ -403,9 +406,8 @@ class SharedbAceBinding {
       }
     }
 
-    // TODO: This is not the right way
     if (update.newMode) {
-      this.session.setMode(update.newMode);
+      this.languageSelectHandler?.(update.newMode);
     }
   };
 
