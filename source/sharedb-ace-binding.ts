@@ -15,7 +15,7 @@ import { AceViewportUtil, AceRangeUtil } from '@convergencelabs/ace-collab-ext';
 import type { Ace, EditSession } from 'ace-builds';
 import type { IAceEditor } from 'react-ace/lib/types';
 import sharedb from 'sharedb/lib/sharedb';
-import type { CollabEditingAccess, PresenceUpdate, SharedbAceUser } from './types';
+import { CollabEditingAccess, type PresenceUpdate, type SharedbAceUser } from './types';
 
 function traverse(object: any, path: string[]) {
   for (const key of path) {
@@ -108,7 +108,10 @@ class SharedbAceBinding {
    * })
    */
   constructor(options: SharedbAceBindingOptions) {
-    this.connectedUsers = {[options.id]: options.user}
+    // Note: several functions rely on connectedUsers in useEffect
+    // so remember to recreate the connectedUsers object
+    // whenever there are any changes
+    this.connectedUsers = { [options.id]: options.user };
     this.editor = options.ace;
     this.session = this.editor.getSession();
     this.path = options.path;
@@ -166,7 +169,8 @@ class SharedbAceBinding {
     // Generates a decent amount of traffic but it's ok for now
     this.editor.renderer.on('afterRender', this.onLocalViewChange);
 
-    this.session.on('changeMode', this.onLocalModeChange);
+    if (this.user.role === CollabEditingAccess.OWNER)
+      this.session.on('changeMode', this.onLocalModeChange);
   };
 
   /**
@@ -181,7 +185,8 @@ class SharedbAceBinding {
     this.session.selection.off('changeCursor', this.onLocalCursorChange);
     this.session.selection.off('changeSelection', this.onLocalSelectionChange);
     this.editor.renderer.off('afterRender', this.onLocalViewChange);
-    this.session.off('changeMode', this.onLocalModeChange);
+    if (this.user.role === CollabEditingAccess.OWNER)
+      this.session.off('changeMode', this.onLocalModeChange);
   };
 
   /**
@@ -363,12 +368,16 @@ class SharedbAceBinding {
 
       if (id in this.connectedUsers) {
         delete this.connectedUsers[id];
+        this.connectedUsers = structuredClone(this.connectedUsers);
       }
 
       return;
     }
 
-    this.connectedUsers[id] = update.user;
+    this.connectedUsers = {
+      ...this.connectedUsers,
+      [id]: update.user
+    };
 
     if (this.cursorManager && update.cursorPos) {
       try {
