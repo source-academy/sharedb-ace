@@ -15,7 +15,7 @@ import { AceViewportUtil, AceRangeUtil } from '@convergencelabs/ace-collab-ext';
 import type { Ace, EditSession } from 'ace-builds';
 import type { IAceEditor } from 'react-ace/lib/types';
 import sharedb from 'sharedb/lib/sharedb';
-import type { PresenceUpdate, SharedbAceUser } from './types';
+import type { CollabEditingAccess, PresenceUpdate, SharedbAceUser } from './types';
 
 function traverse(object: any, path: string[]) {
   for (const key of path) {
@@ -25,6 +25,7 @@ function traverse(object: any, path: string[]) {
 }
 
 interface SharedbAceBindingOptions {
+  id: string;
   ace: IAceEditor;
   doc: sharedb.Doc;
   user: SharedbAceUser;
@@ -62,7 +63,7 @@ class SharedbAceBinding {
 
   localPresence?: sharedb.LocalPresence<PresenceUpdate>;
 
-  connectedUsers: Record<string, SharedbAceUser> = {};
+  connectedUsers: Record<string, SharedbAceUser>;
 
   docSubmitted: sharedb.Callback = (err) => {
     if (err) {
@@ -107,6 +108,7 @@ class SharedbAceBinding {
    * })
    */
   constructor(options: SharedbAceBindingOptions) {
+    this.connectedUsers = {[options.id]: options.user}
     this.editor = options.ace;
     this.session = this.editor.getSession();
     this.path = options.path;
@@ -434,6 +436,15 @@ class SharedbAceBinding {
     this.localPresence?.submit({
       user: this.user,
       selectionRange: AceRangeUtil.toJson(ranges)
+    });
+  };
+
+  changeUserRole = (id: string, newRole: CollabEditingAccess) => {
+    this.localPresence?.submit({
+      user: {
+        ...this.connectedUsers[id],
+        role: newRole
+      }
     });
   };
 

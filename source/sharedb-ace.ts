@@ -34,6 +34,8 @@ interface SharedbAceOptions {
 }
 
 class SharedbAce extends EventEmitter {
+  id: string;
+
   user: SharedbAceUser;
 
   WS: WebSocket;
@@ -65,6 +67,7 @@ class SharedbAce extends EventEmitter {
    */
   constructor(id: string, options: SharedbAceOptions) {
     super();
+    this.id = id;
     this.user = options.user;
 
     if (options.WsUrl === null) {
@@ -137,6 +140,7 @@ class SharedbAce extends EventEmitter {
   ): SharedbAceBinding => {
     const sharePath = path || [];
     const binding = new SharedbAceBinding({
+      id: this.id,
       ace,
       doc: this.doc,
       user: this.user,
