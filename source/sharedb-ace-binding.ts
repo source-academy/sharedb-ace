@@ -347,17 +347,17 @@ class SharedbAceBinding {
       try {
         this.cursorManager?.removeCursor(id);
         // eslint-disable-next-line no-empty
-      } catch { }
+      } catch {}
 
       try {
         this.selectionManager?.removeSelection(id);
         // eslint-disable-next-line no-empty
-      } catch { }
+      } catch {}
 
       try {
         this.radarManager?.removeView(id);
         // eslint-disable-next-line no-empty
-      } catch { }
+      } catch {}
 
       if (id in this.connectedUsers) {
         delete this.connectedUsers[id];
@@ -366,9 +366,7 @@ class SharedbAceBinding {
       return;
     }
 
-    if (!this.connectedUsers[id]) {
-      this.connectedUsers[id] = update.user;
-    }
+    this.connectedUsers[id] = update.user;
 
     if (this.cursorManager && update.cursorPos) {
       try {
@@ -468,17 +466,6 @@ class SharedbAceBinding {
    */
   onRemoteReload = () => {
     this.logger.log('*remote*: reloading document');
-    // Destroy local presence if it exists to prevent
-    // submission of local presence again during initialization
-    if (this.localPresence) {
-      try {
-        this.logger.log('*remote*: destroying local presence');
-        this.localPresence.destroy();
-        this.localPresence = undefined;
-      } catch (error) {
-        console.warn("Error destroying local presence:", error);
-      }
-    }
     this.setInitialValue();
   };
 }
