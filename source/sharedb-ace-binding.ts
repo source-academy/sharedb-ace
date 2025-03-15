@@ -32,6 +32,10 @@ interface SharedbAceBindingOptions {
   cursorManager?: AceMultiCursorManager;
   selectionManager?: AceMultiSelectionManager;
   radarManager?: AceRadarView;
+
+  // Note: several functions rely on connectedUsers in useEffect
+  // so remember to recreate the connectedUsers object
+  // whenever there are any changes
   usersPresence: sharedb.Presence<PresenceUpdate>;
   path: string[];
   languageSelectHandler?: (language: string) => void;
@@ -108,10 +112,6 @@ class SharedbAceBinding {
    * })
    */
   constructor(options: SharedbAceBindingOptions) {
-    // Note: several functions rely on connectedUsers in useEffect
-    // so remember to recreate the connectedUsers object
-    // whenever there are any changes
-    this.connectedUsers = { [options.id]: options.user };
     this.editor = options.ace;
     this.session = this.editor.getSession();
     this.path = options.path;
@@ -127,6 +127,8 @@ class SharedbAceBinding {
 
     // Set value of ace document to ShareDB document value
     this.setInitialValue();
+
+    this.connectedUsers = { [this.localPresence!.presenceId]: options.user };
 
     // Listen to edit changes and cursor position changes
     this.listen();
@@ -379,6 +381,16 @@ class SharedbAceBinding {
       [id]: update.user
     };
 
+    if (update.newRole) {
+      this.connectedUsers = {
+        ...this.connectedUsers,
+        [update.newRole.userId]: {
+          ...this.connectedUsers[update.newRole.userId],
+          role: update.newRole.newRole
+        }
+      };
+    }
+
     if (this.cursorManager && update.cursorPos) {
       try {
         this.cursorManager.setCursor(id, update.cursorPos);
@@ -450,10 +462,8 @@ class SharedbAceBinding {
 
   changeUserRole = (id: string, newRole: CollabEditingAccess) => {
     this.localPresence?.submit({
-      user: {
-        ...this.connectedUsers[id],
-        role: newRole
-      }
+      user: this.user,
+      newRole: { userId: id, newRole }
     });
   };
 

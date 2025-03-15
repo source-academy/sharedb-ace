@@ -21,4 +21,8 @@ export interface PresenceUpdate {
   radarViewRows?: IIndexRange;
   radarCursorRow?: number;
   newMode?: string;
+  newRole?: {
+    userId: string;
+    newRole: CollabEditingAccess;
+  };
 }
