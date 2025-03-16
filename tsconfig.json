@@ -4,13 +4,11 @@
     "isolatedModules": true,
     "module": "NodeNext",
     "moduleResolution": "nodenext",
-    "allowImportingTsExtensions": true,
     "declaration": true,
-    "emitDeclarationOnly": true,
     "strict": true,
-    "outDir": "dist/dist",
+    "outDir": "dist",
     "skipLibCheck": true
   },
   "include": ["source"],
-  "exclude": ["node_modules", "distribution", "dist"]
+  "exclude": ["node_modules", "dist"]
 }

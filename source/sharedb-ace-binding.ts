@@ -67,7 +67,7 @@ class SharedbAceBinding {
 
   localPresence?: sharedb.LocalPresence<PresenceUpdate>;
 
-  connectedUsers: Record<string, SharedbAceUser>;
+  connectedUsers?: Record<string, SharedbAceUser>;
 
   docSubmitted: sharedb.Callback = (err) => {
     if (err) {
@@ -128,8 +128,6 @@ class SharedbAceBinding {
     // Set value of ace document to ShareDB document value
     this.setInitialValue();
 
-    this.connectedUsers = { [this.localPresence!.presenceId]: options.user };
-
     // Listen to edit changes and cursor position changes
     this.listen();
   }
@@ -152,6 +150,8 @@ class SharedbAceBinding {
     for (const [id, update] of Object.entries(this.usersPresence.remotePresences)) {
       this.updatePresence(id, update);
     }
+
+    this.connectedUsers = { [this.localPresence!.presenceId]: this.user };
   };
 
   /**
@@ -368,9 +368,10 @@ class SharedbAceBinding {
         // eslint-disable-next-line no-empty
       } catch {}
 
-      if (id in this.connectedUsers) {
-        delete this.connectedUsers[id];
-        this.connectedUsers = structuredClone(this.connectedUsers);
+      if (this.connectedUsers && id in this.connectedUsers) {
+        const { [id]: removedUser, ...restUsers } = this.connectedUsers;
+        // TODO: Add action here if removedUser is the original owner of the sharedb
+        this.connectedUsers = restUsers;
       }
 
       return;
