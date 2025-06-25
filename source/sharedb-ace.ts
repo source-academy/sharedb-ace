@@ -5,17 +5,46 @@
  * @license MIT
  */
 
-import WebSocket from 'reconnecting-websocket';
+import { WebSocket } from 'partysocket';
 import EventEmitter from 'event-emitter-es6';
-import sharedb from 'sharedb/lib/client';
+import ShareDB from 'sharedb';
+import type { Callback, Socket } from 'sharedb/lib/sharedb';
+import { type Presence, Connection as sharedbConnection } from 'sharedb/lib/client';
+import type {
+  AceMultiCursorManager,
+  AceMultiSelectionManager,
+  AceRadarView
+} from '@convergencelabs/ace-collab-ext';
+import type { IAceEditor } from 'react-ace/lib/types';
 import SharedbAceBinding from './sharedb-ace-binding';
+import type { PresenceUpdate, SharedbAceUser } from './types';
 
-function IllegalArgumentException(message) {
-  this.message = message;
-  this.name = 'IllegalArgumentException';
+interface IllegalArgumentException {
+  name: 'IllegalArgumentException';
+}
+
+function IllegalArgumentException(message: string) {
+  return new Error(message) as IllegalArgumentException;
+}
+
+interface SharedbAceOptions {
+  user: SharedbAceUser;
+  namespace: string;
+  WsUrl: string;
 }
 
 class SharedbAce extends EventEmitter {
+  id: string;
+
+  user: SharedbAceUser;
+
+  WS: WebSocket;
+
+  doc: ShareDB.Doc;
+  usersPresence: Presence<PresenceUpdate>;
+
+  connections: Record<string, SharedbAceBinding>;
+
   /**
    * creating an instance connects to sharedb via websockets
    * and initializes the document with no connections
@@ -36,30 +65,27 @@ class SharedbAce extends EventEmitter {
    * @param {string} options.pluginWsUrl - Websocket URL for extra plugins
    * (different port from options.WsUrl)
    */
-  constructor(id, options) {
+  constructor(id: string, options: SharedbAceOptions) {
     super();
     this.id = id;
     this.user = options.user;
-    if (options.pluginWsUrl !== null) {
-      this.pluginWS = new WebSocket(options.pluginWsUrl);
-    }
 
     if (options.WsUrl === null) {
-      throw new IllegalArgumentException('wsUrl not provided.');
+      throw IllegalArgumentException('wsUrl not provided.');
     }
 
     this.WS = new WebSocket(options.WsUrl);
 
-    const connection = new sharedb.Connection(this.WS);
+    const connection = new sharedbConnection(this.WS as Socket);
     if (options.namespace === null) {
-      throw new IllegalArgumentException('namespace not provided.');
+      throw IllegalArgumentException('namespace not provided.');
     }
     const namespace = options.namespace;
     const doc = connection.get(namespace, id);
 
     // Fetches once from the server, and fires events
     // on subsequent document changes
-    const docSubscribed = (err) => {
+    const docSubscribed: Callback = (err) => {
       if (err) throw err;
 
       if (!doc.type) {
@@ -83,11 +109,9 @@ class SharedbAce extends EventEmitter {
     this.usersPresence = usersPresence;
     this.connections = {};
 
-    this.WS.onopen(() => {
-      for (const conn of this.connections) {
-        conn.onRemoteReload();
-      }
-    })
+    this.WS.addEventListener('open', () => {
+      Object.values(this.connections).forEach((conn) => conn.onRemoteReload());
+    });
   }
 
   /**
@@ -97,27 +121,40 @@ class SharedbAce extends EventEmitter {
    *
    * @param {Object} ace - ace editor instance
    * @param {Object} cursorManager - cursor manager for the editor
+   * @param {Object} selectionManager - selection manager for the editor
+   * @param {Object} radarManager - radar manager for the editor
    * @param {string[]} path - A lens, describing the nesting to the JSON document.
    * It should point to a string.
-   * @param {Object[]} plugins - list of plugins to add to this particular
-   * ace instance
    */
-  add(ace, cursorManager, path, plugins) {
+  add = (
+    ace: IAceEditor,
+    path: string[],
+    managers: {
+      cursorManager?: AceMultiCursorManager;
+      selectionManager?: AceMultiSelectionManager;
+      radarManager?: AceRadarView;
+    },
+    extra?: {
+      languageSelectHandler?: (language: string) => void;
+    }
+  ): SharedbAceBinding => {
     const sharePath = path || [];
     const binding = new SharedbAceBinding({
+      id: this.id,
       ace,
       doc: this.doc,
       user: this.user,
-      cursorManager,
-      usersPresence: this.usersPresence,
       path: sharePath,
-      pluginWS: this.pluginWS,
-      id: this.id,
-      plugins,
+      cursorManager: managers.cursorManager,
+      selectionManager: managers.selectionManager,
+      radarManager: managers.radarManager,
+      usersPresence: this.usersPresence,
+      languageSelectHandler: extra?.languageSelectHandler,
       onError: (error) => this.emit('error', path, error)
     });
     this.connections[path.join('-')] = binding;
-  }
+    return binding;
+  };
 }
 
 export default SharedbAce;

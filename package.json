@@ -1,43 +1,59 @@
 {
   "name": "@sourceacademy/sharedb-ace",
-  "version": "2.0.1",
+  "version": "2.1.0",
   "description": "ShareDB integration with Ace Editor",
-  "main": "./distribution/sharedb-ace.js",
+  "main": "dist/sharedb-ace.js",
+  "module": "dist/sharedb-ace.mjs",
+  "types": "dist/sharedb-ace.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/sharedb-ace.js",
+      "types": "./dist/sharedb-ace.d.ts"
+    },
+    "./binding": {
+      "import": "./dist/sharedb-ace-binding.js",
+      "types": "./dist/sharedb-ace-binding.d.ts"
+    },
+    "./types": {
+      "import": "./dist/types.js",
+      "types": "./dist/types.d.ts"
+    }
+  },
   "repository": "https://github.com/source-academy/sharedb-ace",
   "author": "Jethro Kuan",
   "files": [
-    "dist",
-    "distribution"
+    "dist"
   ],
   "license": "MIT",
   "scripts": {
-    "build": "yarn run build:yarn && yarn run build:dist",
-    "build:yarn": "babel source --out-dir distribution --presets=@babel/preset-env",
-    "build:dist": "cross-env NODE_OPTIONS=--openssl-legacy-provider webpack",
+    "build": "tsup",
     "test": "echo 'doing nothing'",
     "docs": "jsdoc source/*.js -d ./docs/"
   },
+  "dependencies": {
+    "@convergencelabs/ace-collab-ext": "^0.6.0",
+    "event-emitter-es6": "^1.1.5",
+    "logdown": "^3.3.1",
+    "partysocket": "^1.0.3",
+    "sharedb": "^5.1.1"
+  },
   "devDependencies": {
-    "@babel/cli": "^7.10.5",
-    "@babel/core": "^7.11.1",
-    "@babel/preset-env": "^7.11.0",
+    "@types/event-emitter-es6": "^1.1.4",
+    "@types/sharedb": "^5.1.0",
+    "ace-builds": "^1.38.0",
     "amd-loader": "^0.0.8",
-    "assert": "^2.0.0",
+    "assert": "^2.1.0",
     "babel-loader": "^8.1.0",
     "chai": "^4.2.0",
     "chai-as-promised": "^7.1.1",
     "chai-json-equal": "^0.0.1",
-    "cross-env": "^7.0.3",
     "eslint": "^7.6.0",
     "jsdom": "^16.3.0",
     "mocha": "^8.1.1",
-    "webpack": "^5.90.3",
-    "webpack-cli": "^5.1.4"
+    "react-ace": "^14.0.1",
+    "tsc": "^2.0.4",
+    "tsup": "^8.4.0",
+    "typescript": "^5.7.3"
   },
-  "dependencies": {
-    "event-emitter-es6": "^1.1.5",
-    "logdown": "^3.3.1",
-    "reconnecting-websocket": "^4.4.0",
-    "sharedb": "^1.4.1"
-  }
+  "packageManager": "yarn@1.22.22+sha512.a6b2f7906b721bba3d67d4aff083df04dad64c399707841b7acf00f6b133b7ac24255f2652fa22ae3534329dc6180534e98d17432037ff6fd140556e2bb3137e"
 }
