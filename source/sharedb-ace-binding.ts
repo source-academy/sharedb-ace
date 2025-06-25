@@ -5,14 +5,14 @@
  * @license MIT
  */
 
-import Logdown from 'logdown';
 import type {
   AceMultiCursorManager,
   AceMultiSelectionManager,
   AceRadarView
 } from '@convergencelabs/ace-collab-ext';
-import { AceViewportUtil, AceRangeUtil } from '@convergencelabs/ace-collab-ext';
+import { AceRangeUtil, AceViewportUtil } from '@convergencelabs/ace-collab-ext';
 import type { Ace, EditSession } from 'ace-builds';
+import Logdown from 'logdown';
 import type { IAceEditor } from 'react-ace/lib/types';
 import sharedb from 'sharedb/lib/sharedb';
 import { CollabEditingAccess, type PresenceUpdate, type SharedbAceUser } from './types';
@@ -26,19 +26,30 @@ function traverse(object: any, path: string[]) {
 
 interface SharedbAceBindingOptions {
   id: string;
+  /** The Ace editor instance */
   ace: IAceEditor;
+  /** The ShareDB document */
   doc: sharedb.Doc;
+  /** Information regarding the user */
   user: SharedbAceUser;
+  /** The instance managing the cursors in the editor */
   cursorManager?: AceMultiCursorManager;
+  /** The instance managing the selections in the editor */
   selectionManager?: AceMultiSelectionManager;
   radarManager?: AceRadarView;
 
   // Note: several functions rely on connectedUsers in useEffect
   // so remember to recreate the connectedUsers object
   // whenever there are any changes
+  /** The ShareDB presence channel containing information of the users, including cursor positions */
   usersPresence: sharedb.Presence<PresenceUpdate>;
+  /** A lens, describing the nesting to the JSON document. It should point to a string. */
   path: string[];
   languageSelectHandler?: (language: string) => void;
+  /**
+   * A callback on error
+   * @param {Error} err - the error that occurred
+   */
   onError?: (err: unknown) => unknown;
 }
 
@@ -87,19 +98,7 @@ class SharedbAceBinding {
    * ShareDB document. Also , sets up the local and remote event
    * listeners, and begins listening to local and remote change events
    *
-   * @param {Object} options - contains all parameters
-   * @param {Object} options.ace - ace editor instance
-   * @param {Object} options.doc - ShareDB document
-   * @param {Object} options.user - information regarding the user
-   * @param {Object} options.cursorManager - the instance managing
-   * the cursors in the editor
-   * @param {Object} options.selectionManager - the instance managing
-   * the selections in the editor
-   * @param {Object} options.usersPresence - ShareDB presence channel
-   * containing information of the users, including cursor positions
-   * @param {string[]} options.path - A lens, describing the nesting
-   * to the JSON document. It should point to a string.
-   * @param {?function} options.onError - a callback on error
+   * @param options - contains all parameters
    * @example
    * const binding = new SharedbAceBinding({
    *   ace: aceInstance,
