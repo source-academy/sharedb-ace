@@ -3,7 +3,7 @@
 // var expect = chai.expect;
 // var ShareDB = require('sharedb');
 // var assert = require('assert');
-// var SharedbAce = require('../distribution/sharedb-ace').default;
+// var SharedbAce = require('../dist/sharedb-ace').default;
 
 // // ShareDB setup
 // var backend = new ShareDB();
