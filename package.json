@@ -1,6 +1,6 @@
 {
   "name": "@sourceacademy/sharedb-ace",
-  "version": "2.1.0",
+  "version": "2.1.1",
   "description": "ShareDB integration with Ace Editor",
   "main": "dist/sharedb-ace.js",
   "module": "dist/sharedb-ace.mjs",
