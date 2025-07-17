@@ -5,8 +5,8 @@
  * @license MIT
  */
 
+import EventEmitter from 'events';
 import { WebSocket } from 'partysocket';
-import EventEmitter from 'event-emitter-es6';
 import ShareDB from 'sharedb';
 import type { Callback, Socket } from 'sharedb/lib/sharedb';
 import { type Presence, Connection as sharedbConnection } from 'sharedb/lib/client';

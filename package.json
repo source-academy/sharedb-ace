@@ -32,13 +32,12 @@
   },
   "dependencies": {
     "@convergencelabs/ace-collab-ext": "^0.6.0",
-    "event-emitter-es6": "^1.1.5",
     "logdown": "^3.3.1",
     "partysocket": "^1.0.3",
     "sharedb": "^5.1.1"
   },
   "devDependencies": {
-    "@types/event-emitter-es6": "^1.1.4",
+    "@types/node": "^24.0.14",
     "@types/sharedb": "^5.1.0",
     "ace-builds": "^1.38.0",
     "amd-loader": "^0.0.8",
@@ -54,6 +53,5 @@
     "tsc": "^2.0.4",
     "tsup": "^8.4.0",
     "typescript": "^5.7.3"
-  },
-  "packageManager": "yarn@1.22.22+sha512.a6b2f7906b721bba3d67d4aff083df04dad64c399707841b7acf00f6b133b7ac24255f2652fa22ae3534329dc6180534e98d17432037ff6fd140556e2bb3137e"
+  }
 }
