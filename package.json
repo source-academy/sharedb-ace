@@ -1,21 +1,25 @@
 {
   "name": "@sourceacademy/sharedb-ace",
-  "version": "2.1.1",
+  "version": "2.1.2",
   "description": "ShareDB integration with Ace Editor",
   "main": "dist/sharedb-ace.js",
   "module": "dist/sharedb-ace.mjs",
   "types": "dist/sharedb-ace.d.ts",
+  "type": "commonjs",
   "exports": {
     ".": {
-      "import": "./dist/sharedb-ace.js",
+      "require": "./dist/sharedb-ace.js",
+      "import": "./dist/sharedb-ace.mjs",
       "types": "./dist/sharedb-ace.d.ts"
     },
     "./binding": {
-      "import": "./dist/sharedb-ace-binding.js",
+      "require": "./dist/sharedb-ace-binding.js",
+      "import": "./dist/sharedb-ace-binding.mjs",
       "types": "./dist/sharedb-ace-binding.d.ts"
     },
     "./types": {
-      "import": "./dist/types.js",
+      "require": "./dist/types.js",
+      "import": "./dist/types.mjs",
       "types": "./dist/types.d.ts"
     }
   },
