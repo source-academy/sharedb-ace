@@ -1,5 +1,7 @@
 # Sharedb-ace
 
+Needs Node 24 (the version in `.node-version`; see the [Node.js version](https://github.com/source-academy/documentation/blob/main/app/docs/developers/node-version.md) page).
+
 ![NPM Badge](https://badge.fury.io/js/@sourceacademy%2Fsharedb-ace.svg)
 
 This is a fork of the [original sharedb-ace repository](https://github.com/jethrokuan/sharedb-ace).
